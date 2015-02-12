@@ -28,9 +28,13 @@ struct Coords {
 
 /// player data
 struct Player {
+    /// Vector of players
+    typedef std::vector<Player> Vector;
+
     size_t id;          ///< id (orientation) of the player
     Coords coords;      ///< coordinates of the player
     size_t wallsLeft;   ///< number of walls available for the player
+    bool   bIsAlive;    ///< true while the player is alive
 };
 
 /// wall data
@@ -41,7 +45,7 @@ struct Wall {
 
 /// pathfinding data for a cell of the grid
 struct Cell {
-    size_t weight;      ///< weighted distance toward the destination
+    double weight;      ///< weighted distance toward the destination
     size_t direction;   ///< direction of the shortest/best path
 };
 
@@ -71,9 +75,27 @@ public:
         return matrix.at(aX).at(aY);
     }
 
+    /// debug:
+    void dump() const {
+        std::cerr << "  |  ";
+        for (size_t x = 0; x < matrix.size(); ++x) {
+            std::cerr << x << "  |  ";
+        }
+        std::cerr << std::endl;
+        for (size_t y = 0; y < matrix[0].size(); ++y) {
+            std::cerr << y << " | ";
+            for (size_t x = 0; x < matrix.size(); ++x) {
+                std::cerr << matrix[x][y].weight << " " << matrix[x][y].direction << " | ";
+            }
+            std::cerr << std::endl;
+        }
+    }
+
 private:
+    /// Vector of Elements
+    typedef std::vector<TElement>   Vector1D;
     /// Matrix as a vector of vectors of Elements
-    typedef std::vector<std::vector<TElement>> Vector2D;
+    typedef std::vector<Vector1D>   Vector2D;
 
     Vector2D matrix;    ///< Matrix as a vector of vectors of Elements
 };
@@ -96,31 +118,46 @@ int main() {
     // TODO(SRombauts) test a pathfinding algorithm using the grid
     Matrix<Cell> grid(w, h);
 
+    // all players statuses
+    Player::Vector players(playerCount);
+    Player& MySelf = players[myId];
+
     // game loop
     while (1) {
-        Player mySelf;
-        std::vector<Player> players; // other players
         for (size_t id = 0; id < playerCount; ++id) {
             int x; // x-coordinate of the player
             int y; // y-coordinate of the player
             size_t wallsLeft; // number of walls available for the player
             std::cin >> x >> y >> wallsLeft; std::cin.ignore();
+
+            players[id].id          = id; // redundant, but useful for debug
+            players[id].wallsLeft   = wallsLeft;
             // if player still playing, add it to the list of players
             if ((x >= 0) && (y >= 0)) {
-                Player player { id, { static_cast<size_t>(x), static_cast<size_t>(y) }, wallsLeft }; // NOLINT false positive
+                players[id].coords.x = static_cast<size_t>(x);
+                players[id].coords.y = static_cast<size_t>(y);
+                players[id].bIsAlive = true;
+
+                // set the player on the grid
+                grid.set(players[id].coords.x, players[id].coords.y);
+
+                // debug:
                 if (id == myId) {
-                    mySelf = player;
-                    std::cerr << "me(" << player.id << "): [" << player.coords.x << ", " << player.coords.y
-                              << "] (left=" << player.wallsLeft << ")\n";
+                    std::cerr << "me(" << players[id].id << "): [" << players[id].coords.x
+                              << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
                 } else {
-                    players.push_back(player);
-                    std::cerr << "player(" << player.id << "): [" << player.coords.x << ", " << player.coords.y
-                              << "] (left=" << player.wallsLeft << ")\n";
+                    std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
+                              << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
                 }
             } else {
+                players[id].bIsAlive = false;
                 std::cerr << "dead(" << id << "): [" << x << ", " << y << "]\n";
             }
         }
+
+        // debug:
+        grid.dump();
+
         size_t wallCount; // number of walls on the board
         std::cin >> wallCount; std::cin.ignore();
         for (size_t wall = 0; wall < wallCount; ++wall) {
