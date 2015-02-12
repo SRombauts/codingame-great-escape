@@ -32,7 +32,8 @@ else (MSVC)
     set(SYSTEM_LIBRARIES        "rt")
     add_definitions(-std=c++0x)  # -std=c++11
 endif (MSVC)
-set(CPPLINT_ARG_VERBOSE "--verbose=3")
+set(CPPLINT_ARG_LINELENGTH "--linelength=120")
+set(CPPLINT_ARG_VERBOSE    "--verbose=2")
 
 # List all sources/headers files
 set(all_source_files
@@ -54,8 +55,7 @@ if (THEGREATESCAPE_RUN_CPPLINT)
     # add a cpplint target to the "all" target
     add_custom_target(cpplint
      ALL
-     COMMAND python cpplint.py ${CPPLINT_ARG_OUTPUT} ${CPPLINT_ARG_VERBOSE} ${all_source_files}
-     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+     COMMAND python ${PROJECT_SOURCE_DIR}/cpplint/cpplint.py ${CPPLINT_ARG_OUTPUT} ${CPPLINT_ARG_LINELENGTH} ${CPPLINT_ARG_VERBOSE} ${all_source_files}
     )
 else (THEGREATESCAPE_RUN_CPPLINT)
     message(STATUS "THEGREATESCAPE_RUN_CPPLINT OFF")

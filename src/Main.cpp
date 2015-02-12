@@ -8,15 +8,15 @@
  * or copy at http://opensource.org/licenses/MIT)
  */
 
-#include <iostream> // NOLINT(readability/streams) std::cout used for i/o and logs
+#include <iostream>
 #include <string>
 #include <vector>
 #include <algorithm>
 
-// TODO add a structure for orientation/direction data
+// TODO(SRombauts) add a structure for orientation/direction data
 // 'H'orizontal or 'V'ertical orientation
 
-// TODO add a class for commands (+text messages)
+// TODO(SRombauts) add a class for commands (+text messages)
 // LEFT, RIGHT, UP, DOWN
 // or "putX putY putOrientation"
 
@@ -62,11 +62,11 @@ public:
         }
     }
 
-    /// getter for cell at [X, Y] (const reference) uses std::vector::at() with safety check : can throw std::out_of_range
+    /// getter for cell at [X, Y] (const reference) uses vector::at() with safety check : can throw std::out_of_range
     const TElement& get(const size_t aX, const size_t aY) const {
         return matrix.at(aX).at(aY); // return matrix[aX][aY];
     }
-    /// "setter" for cell at [X, Y] (non const reference) uses std::vector::at() with safety check : can throw std::out_of_range
+    /// "setter" for cell at [X, Y] (reference) uses vector::at() with safety check : can throw std::out_of_range
     TElement& set(const size_t aX, const size_t aY) {
         return matrix.at(aX).at(aY);
     }
@@ -93,7 +93,7 @@ int main() {
 
     size_t turn = 0;
 
-    // TODO test a pathfinding algorithm using the grid
+    // TODO(SRombauts) test a pathfinding algorithm using the grid
     Matrix<Cell> grid(w, h);
 
     // game loop
