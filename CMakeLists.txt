@@ -15,22 +15,33 @@ endif (NOT MSVC)
 
 # Define useful variables to handle OS/Compiler differences
 if (MSVC)
-    # Flags for linking with multithread static C and C++ runtime
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
-    set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
     set(CPPLINT_ARG_OUTPUT      "--output=vs7")
     set(CPPCHECK_ARG_TEMPLATE   "--template=vs")
     set(DEV_NULL                "NUL")
     set(SYSTEM_LIBRARIES        "")
-    add_definitions(/D_CRT_SECURE_NO_WARNINGS)
+    # Set warning level to maximum (instead of default /W3)
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /W4")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
 else (MSVC)
-    message(STATUS "CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
-
     set(CPPLINT_ARG_OUTPUT      "--output=eclipse")
     set(CPPCHECK_ARG_TEMPLATE   "--template=gcc")
     set(DEV_NULL                "/dev/null")
     set(SYSTEM_LIBRARIES        "rt")
-    add_definitions(-std=c++0x)  # -std=c++11
+
+    # C++11 :
+    add_definitions(-std=c++0x) # equivalent to "-std=c++11" but backward compatible for GCC 4.6 on Travic-CI
+    # Maximum of Warnings :
+    if (CMAKE_COMPILER_IS_GNUCXX)
+        # GCC flags
+        add_definitions(-rdynamic -fstack-protector-all -Wall -Wextra -Wswitch-default -Wswitch-enum -Winit-self -Wformat-security -Wfloat-equal -Wcast-qual -Wconversion -Wlogical-op -Winline)
+        if (CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL "4.9" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "4.9")
+            add_definitions (-Wfloat-conversion)
+            add_definitions (-Wshadow)
+        endif ()
+    elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+        # Clang flags
+        add_definitions(-fstack-protector-all -Wall -Wextra -Wswitch-default -Wswitch-enum -Winit-self -Wformat-security -Wfloat-equal -Wshadow -Wcast-qual -Wconversion -Winline)
+    endif (CMAKE_COMPILER_IS_GNUCXX)
 endif (MSVC)
 set(CPPLINT_ARG_LINELENGTH "--linelength=120")
 set(CPPLINT_ARG_VERBOSE    "--verbose=2")
