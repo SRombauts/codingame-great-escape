@@ -74,29 +74,33 @@ endif (THEGREATESCAPE_RUN_CPPLINT)
 
 option(THEGREATESCAPE_RUN_CPPCHECK "Run cppcheck C++ static analysis tool." ON)
 if (THEGREATESCAPE_RUN_CPPCHECK)
-    # add a cppcheck target to the "all" target
-    add_custom_target(cppcheck
-     ALL
-     COMMAND cppcheck -j 4 cppcheck --enable=style --quiet ${CPPCHECK_ARG_TEMPLATE} ${PROJECT_SOURCE_DIR}/src
-    )
+    find_program(CPPCHECK_EXECUTABLE NAMES cppcheck)
+    if (CPPCHECK_EXECUTABLE)
+        # add a cppcheck target to the "all" target
+        add_custom_target(cppcheck
+         ALL
+         COMMAND cppcheck -j 4 cppcheck --enable=style --quiet ${CPPCHECK_ARG_TEMPLATE} ${PROJECT_SOURCE_DIR}/src
+        )
+    else (CPPCHECK_EXECUTABLE)
+        message(STATUS "cppcheck not found")
+    endif (CPPCHECK_EXECUTABLE)
 else (THEGREATESCAPE_RUN_CPPCHECK)
     message(STATUS "THEGREATESCAPE_RUN_CPPCHECK OFF")
 endif (THEGREATESCAPE_RUN_CPPCHECK)
 
 option(THEGREATESCAPE_RUN_DOXYGEN "Run Doxygen C++ documentation tool." ON)
 if (THEGREATESCAPE_RUN_DOXYGEN)
-    # add a Doxygen target to the "all" target
-    if (NOT DEFINED ENV{TRAVIS})
-        # if not runing on a Travis CI Virtual Machine
+    find_package(Doxygen)
+    if (DOXYGEN_FOUND)
+        # add a Doxygen target to the "all" target
         add_custom_target(doxygen
          ALL
          COMMAND doxygen Doxyfile > ${DEV_NULL}
          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
         )
-    else()
-        # but no Doxygen under Travis CI: too costly and no real benefit
-        message("no Doxygen target when TRAVIS is defined")
-    endif()
+    else (DOXYGEN_FOUND)
+        message(STATUS "Doxygen not found")
+    endif (DOXYGEN_FOUND)
 else (THEGREATESCAPE_RUN_DOXYGEN)
     message(STATUS "THEGREATESCAPE_RUN_DOXYGEN OFF")
 endif (THEGREATESCAPE_RUN_DOXYGEN)
