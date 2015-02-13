@@ -13,9 +13,19 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <limits>
+#include <stdexcept>
 
 // TODO(SRombauts) add a structure for orientation/direction data
 // 'H'orizontal or 'V'ertical orientation
+
+/// Define directions
+enum EDirection {
+    eRight,
+    eLeft,
+    eDown,
+    eUp
+};
 
 /**
  * @brief Send commands to the game thru standard output
@@ -24,6 +34,26 @@
  */
 class Command {
 public:
+    /// Move the player in the specified direction
+    static void move(const EDirection aDirection) {
+        switch (aDirection) {
+        case eRight:
+            right("go go go!");
+            break;
+        case eLeft:
+            left("back");
+            break;
+        case eDown:
+            down("down the path...");
+            break;
+        case eUp:
+            up("up to the sky :)");
+            break;
+        default:
+            throw std::runtime_error("move: default");
+            break;
+        }
+    }
     /// Move the player to the right of the board (x++)
     static void right(const char* apMessage) {
         std::cout << "RIGHT " << apMessage << std::endl;
@@ -74,8 +104,8 @@ struct Wall {
 
 /// pathfinding data for a cell of the grid
 struct Cell {
-    double weight;      ///< weighted distance toward the destination
-    size_t direction;   ///< direction of the shortest/best path
+    float       weight;     ///< weighted distance toward the destination
+    EDirection  direction;  ///< direction of the shortest/best path
 };
 
 /// templated 2D matrix of generic TElement
@@ -136,6 +166,40 @@ private:
     Vector2D matrix;    ///< Matrix as a vector of vectors of Elements
 };
 
+/// TODO(SRombats): testing shortest path algorithm
+void shortest(Matrix<Cell>& aMatrix, const size_t aX, const size_t aY, const float aWeight, const EDirection aDirection) { // NOLINT
+    // If the weight ot this path is less than any preceding one on this cell
+    if (aMatrix.get(aX, aY).weight > aWeight) {
+        // Update the cell
+        aMatrix.set(aX, aY).weight      = aWeight;
+        aMatrix.set(aX, aY).direction   = aDirection;
+
+        // Recurse into adjacent cells
+        if (aX > 0) {
+            shortest(aMatrix, aX - 1, aY, aWeight + 1.0f, eRight);
+        }
+        if (aX < 8) { // TODO(SRombauts): 8
+            shortest(aMatrix, aX + 1, aY, aWeight + 1.0f, eLeft);
+        }
+        if (aY > 0) {
+            shortest(aMatrix, aX, aY - 1, aWeight + 1.0f, eDown);
+        }
+        if (aY < 8) { // TODO(SRombauts): 8
+            shortest(aMatrix, aX, aY + 1, aWeight + 1.0f, eUp);
+        }
+    }
+}
+/// Shortest path algorithm
+void shortest(Matrix<Cell>& aMatrix) { // NOLINT TODO(SRombauts) non-const ref!
+    // TODO(SRombauts) thoses depends on the player id!
+    float  weight = 1.0f;
+    EDirection direction = eRight;
+    size_t x = 8;
+    for (size_t y = 0; y < 8; ++y) { // TODO(SRombauts) 8
+        shortest(aMatrix, x, y, weight, direction);
+    }
+}
+
 /// debug: dump content of the Matrix of Cells
 void dump(const Matrix<Cell>& aMatrix) {
     std::cerr << "  |  ";
@@ -146,7 +210,8 @@ void dump(const Matrix<Cell>& aMatrix) {
     for (size_t y = 0; y < aMatrix.height(); ++y) {
         std::cerr << y << " |";
         for (size_t x = 0; x < aMatrix.width(); ++x) {
-            std::cerr << std::fixed << std::setprecision(1) << aMatrix.get(x, y).weight
+            const float weight = (aMatrix.get(x, y).weight > 9.9f) ? (9.9f) : (aMatrix.get(x, y).weight);
+            std::cerr << std::fixed << std::setprecision(1) << weight
                       << " " << aMatrix.get(x, y).direction << "|";
         }
         std::cerr << std::endl;
@@ -169,8 +234,7 @@ int main() {
 
     size_t turn = 0;
 
-    // TODO(SRombauts) test a pathfinding algorithm using the grid
-    Matrix<Cell> grid(w, h, Cell{1.0, 0});
+    Matrix<Cell> grid(w, h, Cell{ std::numeric_limits<float>::max(), eRight });
 
     // all players statuses
     Player::Vector players(playerCount);
@@ -191,14 +255,13 @@ int main() {
                 players[id].coords.y = static_cast<size_t>(y);
                 players[id].bIsAlive = true;
 
-                // set the player on the grid : 0.0 weight to forbid this cell
-                grid.set(players[id].coords.x, players[id].coords.y).weight = 0.0;
-
                 // debug:
                 if (id == myId) {
                     std::cerr << "myself(" << players[id].id << "): [" << players[id].coords.x
                               << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
                 } else {
+                    // set the player on the grid : 0.0 weight to forbid this cell
+                    grid.set(players[id].coords.x, players[id].coords.y).weight = 0.0;
                     std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
                               << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
                 }
@@ -213,6 +276,7 @@ int main() {
 
         size_t          wallCount; // number of walls on the board
         std::cin >> wallCount; std::cin.ignore();
+
         Wall::Vector    walls(wallCount);
         for (size_t wall = 0; wall < wallCount; ++wall) {
             std::cin >> walls[wall].coords.x >> walls[wall].coords.y >> walls[wall].orientation; std::cin.ignore();
@@ -223,8 +287,14 @@ int main() {
         ++turn;
         std::cerr << "turn " << turn << std::endl;
 
-        // action: LEFT, RIGHT, UP, DOWN or "putX putY putOrientation" to place a wall
-        Command::right("go go go!");
+        // TODO(SRombauts) test of a pathfinding algorithm:
+        shortest(grid);
+        dump(grid);
+
+        // use the grid to command
+        EDirection bestDirection = grid.get(MySelf.coords.x, MySelf.coords.y).direction;
+        std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>" << bestDirection << std::endl;
+        Command::move(bestDirection);
 
         // return 1; // for debug purpose
     }
