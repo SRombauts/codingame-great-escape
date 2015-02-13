@@ -1,7 +1,8 @@
 codingame-great-escape
 ------------
 
-![codingame-great-escape build status](https://api.travis-ci.org/SRombauts/codingame-great-escape.png "codingame-great-escape build status")
+[![Linux Build Status](https://travis-ci.org/SRombauts/codingame-great-escape.svg)](https://travis-ci.org/SRombauts/codingame-great-escape)
+[![Windows Build status](https://ci.appveyor.com/api/projects/status/github/SRombauts/codingame-great-escape?svg=true)](https://ci.appveyor.com/project/SbastienRombauts/codingame-great-escape)
 
 My attempt at the Multiplayer CodinGame contest "The Great Escape".
 
