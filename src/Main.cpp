@@ -50,7 +50,7 @@ public:
             up("up to the sky :)");
             break;
         default:
-            throw std::runtime_error("move: default");
+            throw std::logic_error("move: default");
             break;
         }
     }
@@ -112,6 +112,9 @@ struct Cell {
 template <typename TElement>
 class Matrix {
 public:
+    /// Vector of matrices
+    typedef std::vector<Matrix<TElement>> Vector;
+
     /**
      * ctor allocating the matrix to the specified size (with default initialisation)
      *
@@ -178,25 +181,45 @@ void shortest(Matrix<Cell>& aMatrix, const size_t aX, const size_t aY, const flo
         if (aX > 0) {
             shortest(aMatrix, aX - 1, aY, aWeight + 1.0f, eRight);
         }
-        if (aX < 8) { // TODO(SRombauts): 8
+        if (aX < aMatrix.width() - 1) {
             shortest(aMatrix, aX + 1, aY, aWeight + 1.0f, eLeft);
         }
         if (aY > 0) {
             shortest(aMatrix, aX, aY - 1, aWeight + 1.0f, eDown);
         }
-        if (aY < 8) { // TODO(SRombauts): 8
+        if (aY < aMatrix.height() - 1) {
             shortest(aMatrix, aX, aY + 1, aWeight + 1.0f, eUp);
         }
     }
 }
 /// Shortest path algorithm
-void shortest(Matrix<Cell>& aMatrix) { // NOLINT TODO(SRombauts) non-const ref!
-    // TODO(SRombauts) thoses depends on the player id!
-    float  weight = 1.0f;
-    EDirection direction = eRight;
-    size_t x = 8;
-    for (size_t y = 0; y < 8; ++y) { // TODO(SRombauts) 8
-        shortest(aMatrix, x, y, weight, direction);
+void shortest(Matrix<Cell>& aMatrix, const Player& aPlayer) { // NOLINT TODO(SRombauts) non-const ref!
+    const float weight = 1.0f;
+    size_t x;
+    size_t y;
+
+    switch (aPlayer.id) {
+    case 0: {}
+        x = 8;
+        for (y = 0; y < aMatrix.height() - 1; ++y) {
+            shortest(aMatrix, x, y, weight, eRight);
+        }
+        break;
+    case 1:
+        x = 0;
+        for (y = 0; y < aMatrix.height() - 1; ++y) {
+            shortest(aMatrix, x, y, weight, eLeft);
+        }
+        break;
+    case 2:
+        y = 8;
+        for (x = 0; x < aMatrix.width() - 1; ++x) {
+            shortest(aMatrix, x, y, weight, eDown);
+        }
+        break;
+    default:
+        throw std::logic_error("shortest: default");
+        break;
     }
 }
 
@@ -234,14 +257,14 @@ int main() {
 
     size_t turn = 0;
 
-    Matrix<Cell> grid(w, h, Cell{ std::numeric_limits<float>::max(), eRight });
-
     // all players statuses
     Player::Vector players(playerCount);
     Player& MySelf = players[myId];
 
     // game loop
     while (1) {
+        // TODO(SRombauts) ; a grid by player
+        Matrix<Cell> grid(w, h, Cell{ std::numeric_limits<float>::max(), eRight });
         for (size_t id = 0; id < playerCount; ++id) {
             players[id].id          = id; // redundant, but useful for debug
 
@@ -288,7 +311,7 @@ int main() {
         std::cerr << "turn " << turn << std::endl;
 
         // TODO(SRombauts) test of a pathfinding algorithm:
-        shortest(grid);
+        shortest(grid, MySelf);
         dump(grid);
 
         // use the grid to command
