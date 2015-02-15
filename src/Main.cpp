@@ -36,10 +36,49 @@ char toChar(const EDirection aDirection) {
     return direction;
 }
 
+/// coordinates
+struct Coords {
+    size_t x;   ///< x-coordinate (column)
+    size_t y;   ///< y-coordinate (row/line)
+
+    /// get coordinates of the next cell at the right of the current one
+    Coords right() const {
+        return Coords{ x + 1, y };
+    }
+    /// get coordinates of the next cell at the left of the current one
+    Coords left() const {
+        return Coords{ x - 1, y };
+    }
+    /// get coordinates of the next cell at the bottom of the current one
+    Coords down() const {
+        return Coords{ x, y + 1 };
+    }
+    /// get coordinates of the next cell at the top of the current one
+    Coords up() const {
+        return Coords{ x, y - 1 };
+    }
+
+    /// get coordinates of the next cell at the bottom-right of the current one
+    Coords downright() const {
+        return Coords{ x + 1, y + 1 };
+    }
+    /// get coordinates of the next cell at the bottom-left of the current one
+    Coords downleft() const {
+        return Coords{ x - 1, y + 1 };
+    }
+    /// get coordinates of the next cell at the top-right of the current one
+    Coords upright() const {
+        return Coords{ x + 1, y - 1 };
+    }
+    /// get coordinates of the next cell at the top-left of the current one
+    Coords upleft() const {
+        return Coords{ x - 1, y - 1 };
+    }
+};
 
 /**
  * @brief Send commands to the game thru standard output
- * 
+ *
  * Commands are string like LEFT, RIGHT, UP, DOWN or "putX putY putOrientation".
  */
 class Command {
@@ -70,51 +109,19 @@ public:
     }
     /// Move the player to the left of the board (x--)
     static void left(const char* apMessage) {
-        std::cout << "LEFT " << apMessage  << std::endl;
+        std::cout << "LEFT " << apMessage << std::endl;
     }
     /// Move the player to the bottom of the board (y++)
     static void down(const char* apMessage) {
-        std::cout << "DOWN " << apMessage  << std::endl;
+        std::cout << "DOWN " << apMessage << std::endl;
     }
     /// Move the player to the top of the board (y--)
     static void up(const char* apMessage) {
-        std::cout << "UP " << apMessage  << std::endl;
+        std::cout << "UP " << apMessage << std::endl;
     }
     /// Put a new Wall to a specified location and orientation
-    static void put(const size_t aX, const size_t aY, const char aOrientation, const char* apMessage) {
-        std::cout << aX << aY << aOrientation << " " << apMessage  << std::endl;
-    }
-};
-
-/// coordinates
-struct Coords {
-    size_t x;   ///< x-coordinate (column)
-    size_t y;   ///< y-coordinate (row/line)
-
-    /// get coordinates of the next cell at the right of the current one
-    Coords right() const {
-        return Coords{ x + 1, y };
-    }
-    /// get coordinates of the next cell at the left of the current one
-    Coords left() const {
-        return Coords{ x - 1, y };
-    }
-    /// get coordinates of the next cell at the bottom of the current one
-    Coords down() const {
-        return Coords{ x, y + 1 };
-    }
-    /// get coordinates of the next cell at the top of the current one
-    Coords up() const {
-        return Coords{ x, y - 1 };
-    }
-
-    /// get coordinates of the next cell at the top-right of the current one
-    Coords upright() const {
-        return Coords{ x + 1, y - 1 };
-    }
-    /// get coordinates of the next cell at the bottom-left of the current one
-    Coords downleft() const {
-        return Coords{ x - 1, y + 1 };
+    static void put(const Coords& aCoords, const char aOrientation, const char* apMessage) {
+        std::cout << aCoords.x << " " << aCoords.y << " " << aOrientation << " " << apMessage << std::endl;
     }
 };
 
@@ -273,7 +280,7 @@ void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
 void findShortest(Matrix<Cell>& aMatrix, const Matrix<Collision>& aCollisions,
                   const Coords& aCoords, const float aWeight, const EDirection aDirection) {
     // If the weight ot this path is less than any preceding one on this cell
-    // TODO(SRombauts): in case of equal weight, add a prefered direction, or add some randomness ?
+    // TODO(SRombauts): in case of equal weight, go into the prefered direction
     if (aMatrix.get(aCoords).weight > aWeight) {
         // Update the cell
         aMatrix.set(aCoords).weight = aWeight;
@@ -408,10 +415,34 @@ int main() {
         std::cerr << "matrix of paths:" << std::endl;
         paths.dump();
 
-        // use the path to command
-        EDirection bestDirection = paths.get(MySelf.coords.x, MySelf.coords.y).direction;
-        std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>" << bestDirection << std::endl;
-        Command::move(bestDirection);
+        // TODO(SRombauts): put walls in time and with intelligence
+        if (turn == 6) {
+            // for now, only put one wall at the last minute (only way to keep it safe)
+            if ((myId != 0) && (players[0].bIsAlive)) {
+                if (players[0].coords.y < h - 2) {
+                    Command::put(players[0].coords.right(), 'V', "stop here");
+                } else {
+                    Command::put(players[0].coords.upright(), 'V', "stop there");
+                }
+            } else if ((myId != 1) && (players[1].bIsAlive)) {
+                if (players[1].coords.y < h - 2) {
+                    Command::put(players[1].coords, 'V', "stop here");
+                } else {
+                    Command::put(players[1].coords.up(), 'V', "stop there");
+                }
+            } else {
+                if (players[2].coords.x < w - 2) {
+                    Command::put(players[2].coords.down(), 'H', "stop here");
+                } else {
+                    Command::put(players[2].coords.downleft(), 'H', "stop there");
+                }
+            }
+        } else {
+            // use the matrix of shortest paths to issue a command
+            EDirection bestDirection = paths.get(MySelf.coords.x, MySelf.coords.y).direction;
+            std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>" << bestDirection << std::endl;
+            Command::move(bestDirection);
+        }
 
         // return 1; // for debug purpose
     }
