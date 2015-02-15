@@ -24,6 +24,19 @@ enum EDirection {
     eUp
 };
 
+char toChar(const EDirection aDirection) {
+    char direction;
+    switch (aDirection) {
+    case eRight:    direction = '>';    break;
+    case eLeft:     direction = '<';    break;
+    case eUp:       direction = '^';    break;
+    case eDown:     direction = 'v';    break;
+    default:        direction = '?';    break;
+    }
+    return direction;
+}
+
+
 /**
  * @brief Send commands to the game thru standard output
  * 
@@ -125,7 +138,7 @@ struct Wall {
     char   orientation; ///< 'H'orizontal or 'V'ertical orientation
 };
 
-/// wall collision data for the matrix of walls
+/// wall collision data of a cell for the matrix of walls
 struct Collision {
     bool bRight;    ///< is there a wall on the right of this Cell
     bool bLeft;     ///< is there a wall on the left of this Cell
@@ -134,18 +147,20 @@ struct Collision {
 
     /// Debug dump (for the bellow generic templeted Matrix::dump() method)
     void dump() const {
-        std::cerr << " " << bRight << bLeft << bDown << bUp << " |";
+        std::cerr << " " << (bLeft ? '<' : ' ') << (bDown ? 'v' : ' ')
+                         << (bUp ? '^' : ' ') << (bRight ? '>' : ' ') << " |";
     }
 };
 
-/// a cell data for the matrix of pathfinding
+/// data of a cell for the matrix of pathfinding
 struct Cell {
     float       weight;     ///< weighted distance toward the destination
     EDirection  direction;  ///< direction of the shortest/best path
 
     /// Debug dump (for the bellow generic templeted Matrix::dump() method)
     void dump() const {
-        std::cerr << std::fixed << std::setprecision(1) << std::setw(4) << weight << " " << direction << "|";
+        std::cerr << std::fixed << std::setprecision(1) << std::setw(4) << weight << " "
+                  << toChar(direction) << "|";
     }
 };
 
