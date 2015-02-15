@@ -209,7 +209,7 @@ private:
 };
 
 /// Set a wall into the collision matrix
-void wall(Matrix<Collision>& aCollisions, const Wall& aWall) { // NOLINT
+void wall(Matrix<Collision>& aCollisions, const Wall& aWall) {
     // TODO(SRombauts) add those walls into the 8x8 matrix of left/right/up/down walls
     if (aWall.orientation == 'H') { // 'H' --
         // x,y-1 x+1,y-1
@@ -229,7 +229,7 @@ void wall(Matrix<Collision>& aCollisions, const Wall& aWall) { // NOLINT
 }
 
 /// Recursive shortest path algorithm
-void shortest(Matrix<Cell>& aMatrix, const Coords& aCoords, const float aWeight, const EDirection aDirection) { // NOLINT
+void shortest(Matrix<Cell>& aMatrix, const Coords& aCoords, const float aWeight, const EDirection aDirection) {
     // If the weight ot this path is less than any preceding one on this cell
     if (aMatrix.get(aCoords).weight > aWeight) {
         // Update the cell
@@ -252,7 +252,7 @@ void shortest(Matrix<Cell>& aMatrix, const Coords& aCoords, const float aWeight,
     }
 }
 /// Shortest path algorithm
-void shortest(Matrix<Cell>& aMatrix, const Player& aPlayer) { // NOLINT TODO(SRombauts) non-const ref!
+void shortest(Matrix<Cell>& aMatrix, const Player& aPlayer) {
     const float weight = 1.0f;
     size_t x;
     size_t y;
