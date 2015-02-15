@@ -260,19 +260,19 @@ void shortest(Matrix<Cell>& aMatrix, const Player& aPlayer) {
     switch (aPlayer.id) {
     case 0: {}
         x = 8;
-        for (y = 0; y < aMatrix.height() - 1; ++y) {
+        for (y = 0; y < aMatrix.height(); ++y) {
             shortest(aMatrix, Coords{ x, y }, weight, eRight);
         }
         break;
     case 1:
         x = 0;
-        for (y = 0; y < aMatrix.height() - 1; ++y) {
+        for (y = 0; y < aMatrix.height(); ++y) {
             shortest(aMatrix, Coords{ x, y }, weight, eLeft);
         }
         break;
     case 2:
         y = 8;
-        for (x = 0; x < aMatrix.width() - 1; ++x) {
+        for (x = 0; x < aMatrix.width(); ++x) {
             shortest(aMatrix, Coords{ x, y }, weight, eDown);
         }
         break;
