@@ -270,31 +270,33 @@ void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
 }
 
 /// Recursive shortest path algorithm
-void findShortest(Matrix<Cell>& aMatrix, const Coords& aCoords, const float aWeight, const EDirection aDirection) {
+void findShortest(Matrix<Cell>& aMatrix, const Matrix<Collision>& aCollisions,
+                  const Coords& aCoords, const float aWeight, const EDirection aDirection) {
     // If the weight ot this path is less than any preceding one on this cell
+    // TODO(SRombauts): in case of equal weight, add a prefered direction, or add some randomness ?
     if (aMatrix.get(aCoords).weight > aWeight) {
         // Update the cell
         aMatrix.set(aCoords).weight = aWeight;
         aMatrix.set(aCoords).direction = aDirection;
 
         // Recurse into adjacent cells
-        if (aCoords.x > 0) {
-            findShortest(aMatrix, aCoords.left(),  aWeight + 1.0f, eRight);
+        if ((aCoords.x > 0) && (!aCollisions.get(aCoords).bLeft)) {
+            findShortest(aMatrix, aCollisions, aCoords.left(), aWeight + 1.0f, eRight);
         }
-        if (aCoords.x < aMatrix.width() - 1) {
-            findShortest(aMatrix, aCoords.right(), aWeight + 1.0f, eLeft);
+        if ((aCoords.x < aMatrix.width() - 1) && (!aCollisions.get(aCoords).bRight)) {
+            findShortest(aMatrix, aCollisions, aCoords.right(), aWeight + 1.0f, eLeft);
         }
-        if (aCoords.y > 0) {
-            findShortest(aMatrix, aCoords.up(),    aWeight + 1.0f, eDown);
+        if ((aCoords.y > 0) && (!aCollisions.get(aCoords).bUp)) {
+            findShortest(aMatrix, aCollisions, aCoords.up(), aWeight + 1.0f, eDown);
         }
-        if (aCoords.y < aMatrix.height() - 1) {
-            findShortest(aMatrix, aCoords.down(),  aWeight + 1.0f, eUp);
+        if ((aCoords.y < aMatrix.height() - 1) && (!aCollisions.get(aCoords).bDown)) {
+            findShortest(aMatrix, aCollisions, aCoords.down(), aWeight + 1.0f, eUp);
         }
     }
 }
 /// Shortest path algorithm
-void findShortest(Matrix<Cell>& aMatrix, const Player& aPlayer) {
-    const float weight = 1.0f;
+void findShortest(Matrix<Cell>& aMatrix, const Matrix<Collision>& aCollisions, const Player& aPlayer) {
+    const float weight = 0.0f;
     size_t x;
     size_t y;
 
@@ -302,19 +304,19 @@ void findShortest(Matrix<Cell>& aMatrix, const Player& aPlayer) {
     case 0: {}
         x = 8;
         for (y = 0; y < aMatrix.height(); ++y) {
-            findShortest(aMatrix, Coords{ x, y }, weight, eRight);
+            findShortest(aMatrix, aCollisions, Coords{ x, y }, weight, eRight);
         }
         break;
     case 1:
         x = 0;
         for (y = 0; y < aMatrix.height(); ++y) {
-            findShortest(aMatrix, Coords{ x, y }, weight, eLeft);
+            findShortest(aMatrix, aCollisions, Coords{ x, y }, weight, eLeft);
         }
         break;
     case 2:
         y = 8;
         for (x = 0; x < aMatrix.width(); ++x) {
-            findShortest(aMatrix, Coords{ x, y }, weight, eDown);
+            findShortest(aMatrix, aCollisions, Coords{ x, y }, weight, eDown);
         }
         break;
     default:
@@ -337,14 +339,12 @@ int main() {
     size_t myId; // id of my player (0 = 1st player, 1 = 2nd player, ...)
     std::cin >> w >> h >> playerCount >> myId; std::cin.ignore();
 
-    size_t turn = 0;
-
     // all players statuses
     Player::Vector players(playerCount);
     Player& MySelf = players[myId];
 
     // game loop
-    while (1) {
+    for (size_t turn = 0; turn < 100; ++turn) {
         for (size_t id = 0; id < playerCount; ++id) {
             int x; // x-coordinate of the player
             int y; // y-coordinate of the player
@@ -386,7 +386,6 @@ int main() {
             setWall(collisions, walls[idx]);
         }
 
-        ++turn;
         std::cerr << "turn " << turn << std::endl;
 
         // debug dump:
@@ -405,7 +404,7 @@ int main() {
         }
 
         // Test of a simple pathfinding algorithm:
-        findShortest(paths, MySelf);
+        findShortest(paths, collisions, MySelf);
         std::cerr << "matrix of paths:" << std::endl;
         paths.dump();
 
