@@ -125,18 +125,28 @@ struct Wall {
     char   orientation; ///< 'H'orizontal or 'V'ertical orientation
 };
 
-/// wall collision data for the path of walls
+/// wall collision data for the matrix of walls
 struct Collision {
     bool bRight;    ///< is there a wall on the right of this Cell
     bool bLeft;     ///< is there a wall on the left of this Cell
     bool bDown;     ///< is there a wall on the bottom of this Cell
     bool bUp;       ///< is there a wall on the top of this Cell
+
+    /// Debug dump (for the bellow generic templeted Matrix::dump() method)
+    void dump() const {
+        std::cerr << " " << bRight << bLeft << bDown << bUp << " |";
+    }
 };
 
-/// pathfinding data for a cell of the path
+/// a cell data for the matrix of pathfinding
 struct Cell {
     float       weight;     ///< weighted distance toward the destination
     EDirection  direction;  ///< direction of the shortest/best path
+
+    /// Debug dump (for the bellow generic templeted Matrix::dump() method)
+    void dump() const {
+        std::cerr << std::fixed << std::setprecision(1) << std::setw(4) << weight << " " << direction << "|";
+    }
 };
 
 /// templated 2D matrix of generic TElement
@@ -199,6 +209,22 @@ public:
         return mMatrix.at(aCoords.x).at(aCoords.y);
     }
 
+    /// debug: dump content of the Matrix of TElement, using a required TElement::dump() method
+    void dump() {
+        std::cerr << " |";
+        for (size_t x = 0; x < width(); ++x) {
+            std::cerr << x << "     |";
+        }
+        std::cerr << std::endl;
+        for (size_t y = 0; y < height(); ++y) {
+            std::cerr << y << "|";
+            for (size_t x = 0; x < width(); ++x) {
+                get(x, y).dump();
+            }
+            std::cerr << std::endl;
+        }
+    }
+
 private:
     /// Vector of Elements
     typedef std::vector<TElement>   Vector1D;
@@ -209,7 +235,7 @@ private:
 };
 
 /// Set a wall into the collision matrix
-void wall(Matrix<Collision>& aCollisions, const Wall& aWall) {
+void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
     // TODO(SRombauts) add those walls into the 8x8 matrix of left/right/up/down walls
     if (aWall.orientation == 'H') { // 'H' --
         // x,y-1 x+1,y-1
@@ -229,7 +255,7 @@ void wall(Matrix<Collision>& aCollisions, const Wall& aWall) {
 }
 
 /// Recursive shortest path algorithm
-void shortest(Matrix<Cell>& aMatrix, const Coords& aCoords, const float aWeight, const EDirection aDirection) {
+void findShortest(Matrix<Cell>& aMatrix, const Coords& aCoords, const float aWeight, const EDirection aDirection) {
     // If the weight ot this path is less than any preceding one on this cell
     if (aMatrix.get(aCoords).weight > aWeight) {
         // Update the cell
@@ -238,21 +264,21 @@ void shortest(Matrix<Cell>& aMatrix, const Coords& aCoords, const float aWeight,
 
         // Recurse into adjacent cells
         if (aCoords.x > 0) {
-            shortest(aMatrix, aCoords.left(),  aWeight + 1.0f, eRight);
+            findShortest(aMatrix, aCoords.left(),  aWeight + 1.0f, eRight);
         }
         if (aCoords.x < aMatrix.width() - 1) {
-            shortest(aMatrix, aCoords.right(), aWeight + 1.0f, eLeft);
+            findShortest(aMatrix, aCoords.right(), aWeight + 1.0f, eLeft);
         }
         if (aCoords.y > 0) {
-            shortest(aMatrix, aCoords.up(),    aWeight + 1.0f, eDown);
+            findShortest(aMatrix, aCoords.up(),    aWeight + 1.0f, eDown);
         }
         if (aCoords.y < aMatrix.height() - 1) {
-            shortest(aMatrix, aCoords.down(),  aWeight + 1.0f, eUp);
+            findShortest(aMatrix, aCoords.down(),  aWeight + 1.0f, eUp);
         }
     }
 }
 /// Shortest path algorithm
-void shortest(Matrix<Cell>& aMatrix, const Player& aPlayer) {
+void findShortest(Matrix<Cell>& aMatrix, const Player& aPlayer) {
     const float weight = 1.0f;
     size_t x;
     size_t y;
@@ -261,42 +287,24 @@ void shortest(Matrix<Cell>& aMatrix, const Player& aPlayer) {
     case 0: {}
         x = 8;
         for (y = 0; y < aMatrix.height(); ++y) {
-            shortest(aMatrix, Coords{ x, y }, weight, eRight);
+            findShortest(aMatrix, Coords{ x, y }, weight, eRight);
         }
         break;
     case 1:
         x = 0;
         for (y = 0; y < aMatrix.height(); ++y) {
-            shortest(aMatrix, Coords{ x, y }, weight, eLeft);
+            findShortest(aMatrix, Coords{ x, y }, weight, eLeft);
         }
         break;
     case 2:
         y = 8;
         for (x = 0; x < aMatrix.width(); ++x) {
-            shortest(aMatrix, Coords{ x, y }, weight, eDown);
+            findShortest(aMatrix, Coords{ x, y }, weight, eDown);
         }
         break;
     default:
         throw std::logic_error("shortest: default");
         break;
-    }
-}
-
-/// debug: dump content of the Matrix of Cells
-void dump(const Matrix<Cell>& aMatrix) {
-    std::cerr << "  |  ";
-    for (size_t x = 0; x < aMatrix.width(); ++x) {
-        std::cerr << x << "  |  ";
-    }
-    std::cerr << std::endl;
-    for (size_t y = 0; y < aMatrix.height(); ++y) {
-        std::cerr << y << " |";
-        for (size_t x = 0; x < aMatrix.width(); ++x) {
-            const float weight = (aMatrix.get(x, y).weight > 9.9f) ? (9.9f) : (aMatrix.get(x, y).weight);
-            std::cerr << std::fixed << std::setprecision(1) << weight
-                      << " " << aMatrix.get(x, y).direction << "|";
-        }
-        std::cerr << std::endl;
     }
 }
 
@@ -322,8 +330,6 @@ int main() {
 
     // game loop
     while (1) {
-        // TODO(SRombauts) a grid for pathfinding by player
-        Matrix<Cell> path(w, h, Cell{ std::numeric_limits<float>::max(), eRight });
         for (size_t id = 0; id < playerCount; ++id) {
             int x; // x-coordinate of the player
             int y; // y-coordinate of the player
@@ -344,9 +350,7 @@ int main() {
                     std::cerr << "myself(" << players[id].id << "): [" << players[id].coords.x
                               << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
                 } else {
-                    // set the player on the path : 0.0 weight to forbid this cell
-                    path.set(players[id].coords.x, players[id].coords.y).weight = 0.0;
-                    std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
+                     std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
                               << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
                 }
             } else {
@@ -364,18 +368,34 @@ int main() {
             std::cin >> walls[idx].coords.x >> walls[idx].coords.y >> walls[idx].orientation; std::cin.ignore();
             std::cerr << "idx(" << idx << "): [" << walls[idx].coords.x << ", " << walls[idx].coords.y << "] '"
                       << walls[idx].orientation <<"'\n";
-            wall(collisions, walls[idx]);
+            setWall(collisions, walls[idx]);
         }
 
         ++turn;
         std::cerr << "turn " << turn << std::endl;
 
-        // TODO(SRombauts) test of a pathfinding algorithm:
-        shortest(path, MySelf);
-        dump(path);
+        // debug dump:
+        std::cerr << "matrix of walls:" << std::endl;
+        collisions.dump();
+
+        // TODO(SRombauts) use one grid for pathfinding for each player
+        Matrix<Cell> paths(w, h, Cell{ std::numeric_limits<float>::max(), eRight });
+        for (size_t id = 0; id < playerCount; ++id) {
+            // debug:
+            if (id != myId) {
+                // set the player on the path : 0.0 weight to forbid this cell
+                // TODO(SRombauts): only put the player onto the grid if not far from us?
+                paths.set(players[id].coords.x, players[id].coords.y).weight = 0.0;
+            }
+        }
+
+        // Test of a simple pathfinding algorithm:
+        findShortest(paths, MySelf);
+        std::cerr << "matrix of paths:" << std::endl;
+        paths.dump();
 
         // use the path to command
-        EDirection bestDirection = path.get(MySelf.coords.x, MySelf.coords.y).direction;
+        EDirection bestDirection = paths.get(MySelf.coords.x, MySelf.coords.y).direction;
         std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>" << bestDirection << std::endl;
         Command::move(bestDirection);
 
