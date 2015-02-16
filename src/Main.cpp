@@ -91,6 +91,11 @@ struct Coords {
     Coords upleft() const {
         return Coords{ x - 1, y - 1 };
     }
+
+    /// Comparaison operator
+    bool operator== (const Coords& aCoords) const {
+        return ((x == aCoords.x) && (y == aCoords.y));
+    }
 };
 
 /**
@@ -321,7 +326,7 @@ void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
         aCollisions.set(aWall.coords.upright()).bDown = true;
         aCollisions.set(aWall.coords)          .bUp   = true;
         aCollisions.set(aWall.coords.right())  .bUp   = true;
-    } else { // 'V' |
+    } else { // .orientation == 'V'
         // x-1,y   x,y
         // x-1,y-1 x,y-1
         aCollisions.set(aWall.coords.left()).bRight     = true;
@@ -329,6 +334,62 @@ void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
         aCollisions.set(aWall.coords).bLeft             = true;
         aCollisions.set(aWall.coords.down()).bLeft      = true;
     }
+}
+
+
+/// Test compatibility of a new wall against a wall already on the board
+bool isCompatible(const Wall& aExistingWall, const Wall& aNewWall) {
+    bool bCompatible = true;
+    if (aExistingWall.orientation == 'H') {
+        if        ((aNewWall.orientation == 'H')
+               &&    ((aExistingWall.coords.left()  == aNewWall.coords)
+                   || (aExistingWall.coords         == aNewWall.coords)
+                   || (aExistingWall.coords.right() == aNewWall.coords))) {
+            bCompatible = false;
+        } else if ((aNewWall.orientation == 'V') && (aExistingWall.coords.upright() == aNewWall.coords)) {
+            bCompatible = false;
+        }
+    } else { // gWall.orientation == 'V'
+        if        ((aNewWall.orientation == 'V')
+               &&   ((aExistingWall.coords.up()     == aNewWall.coords)
+                  || (aExistingWall.coords          == aNewWall.coords)
+                  || (aExistingWall.coords.down()   == aNewWall.coords))) {
+            bCompatible = false;
+        } else if ((aNewWall.orientation == 'H') && ((aExistingWall.coords.downleft() == aNewWall.coords))) { // 'V'
+            bCompatible = false;
+        }
+    }
+    return bCompatible;
+}
+
+/// Test compatibility of a new wall based solely on coordinates
+bool isCompatible(const Matrix<Cell>& aMatrix, const Wall& aWall) {
+    bool bCompatible = true;
+
+    if (aWall.orientation == 'H') {
+        if ((aWall.coords.x >= aMatrix.width()-1) || (aWall.coords.y == 0) || (aWall.coords.y > aMatrix.height())) {
+            bCompatible = false;
+        }
+    } else { // .orientation == 'V'
+        if ((aWall.coords.y >= aMatrix.height()-1) || (aWall.coords.x == 0) || (aWall.coords.x > aMatrix.width())) {
+            bCompatible = false;
+        }
+    }
+
+    return bCompatible;
+}
+
+/// Test compatibility of a new wall against all walls already on the board
+bool isCompatible(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWalls, const Wall& aWall) {
+    bool bCompatible = isCompatible(aMatrix, aWall);
+
+    Wall::Vector::const_iterator iWall = aExistingWalls.begin();
+    while ((iWall != aExistingWalls.end()) && (bCompatible == true)) {
+        bCompatible = isCompatible(*iWall, aWall);
+        ++iWall;
+    }
+
+    return bCompatible;
 }
 
 /// Recursive shortest path algorithm
@@ -346,13 +407,13 @@ void findShortest(Player& aPlayer, const Matrix<Collision>& aCollisions,
         if ((aCoords.x > 0) && (!aCollisions.get(aCoords).bLeft)) {
             findShortest(aPlayer, aCollisions, aCoords.left(), aWeight + 1, eRight);
         }
-        if ((aCoords.x < aPlayer.paths.width() - 1) && (!aCollisions.get(aCoords).bRight)) {
+        if ((aCoords.x < aPlayer.paths.width()-1) && (!aCollisions.get(aCoords).bRight)) {
             findShortest(aPlayer, aCollisions, aCoords.right(), aWeight + 1, eLeft);
         }
         if ((aCoords.y > 0) && (!aCollisions.get(aCoords).bUp)) {
             findShortest(aPlayer, aCollisions, aCoords.up(), aWeight + 1, eDown);
         }
-        if ((aCoords.y < aPlayer.paths.height() - 1) && (!aCollisions.get(aCoords).bDown)) {
+        if ((aCoords.y < aPlayer.paths.height()-1) && (!aCollisions.get(aCoords).bDown)) {
             findShortest(aPlayer, aCollisions, aCoords.down(), aWeight + 1, eUp);
         }
     }
@@ -427,10 +488,10 @@ int main() {
                 // debug:
                 if (id == myId) {
                     std::cerr << "myself(" << players[id].id << "): [" << players[id].coords.x
-                              << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
+                              << ", " << players[id].coords.y << "] (wallsLeft=" << players[id].wallsLeft << ")\n";
                 } else {
                      std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
-                              << ", " << players[id].coords.y << "] (left=" << players[id].wallsLeft << ")\n";
+                              << ", " << players[id].coords.y << "] (wallsLeft=" << players[id].wallsLeft << ")\n";
                 }
             } else {
                 players[id].bIsAlive = false;
@@ -491,7 +552,7 @@ int main() {
         }
         std::cerr << std::endl;
 
-        // TODO(SRombauts): put walls in time and with intelligence
+        // TODO(SRombauts): replace this to put walls in time and with intelligence
         if (turn == 6) {
             // for now, only put one wall at the last minute (only way to keep it safe)
             if ((myId != 0) && (players[0].bIsAlive)) {
@@ -516,7 +577,7 @@ int main() {
         } else {
             // use the matrix of shortest paths to issue a command
             EDirection bestDirection = MySelf.paths.get(MySelf.coords).direction;
-            std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>" << bestDirection << std::endl;
+            std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>'" << toChar(bestDirection) << "'\n";
             Command::move(bestDirection);
         }
 
