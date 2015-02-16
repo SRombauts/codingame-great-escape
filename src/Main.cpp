@@ -419,14 +419,6 @@ int main() {
 
         // TODO(SRombauts) use one grid for pathfinding for each player
         Matrix<Cell> paths(w, h, Cell{ std::numeric_limits<float>::max(), eRight });
-        for (size_t id = 0; id < playerCount; ++id) {
-            // debug:
-            if (id != myId) {
-                // set the player on the path : 0.0 weight to forbid this cell
-                // TODO(SRombauts): only put the player onto the grid if not far from us?
-                paths.set(players[id].coords.x, players[id].coords.y).weight = -1.0f;
-            }
-        }
 
         // pathfinding algorithm:
         findShortest(paths, collisions, MySelf);
