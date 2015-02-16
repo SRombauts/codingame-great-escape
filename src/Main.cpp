@@ -18,6 +18,7 @@
 
 /// Define directions
 enum EDirection {
+    eNone,
     eRight,
     eLeft,
     eDown,
@@ -41,6 +42,7 @@ EDirection fromPlayerId(const size_t aId) {
 char toChar(const EDirection aDirection) {
     char direction;
     switch (aDirection) {
+    case eNone:     direction = ' ';    break;
     case eRight:    direction = '>';    break;
     case eLeft:     direction = '<';    break;
     case eDown:     direction = 'v';    break;
@@ -113,6 +115,7 @@ public:
         case eUp:
             up("up to the sky :)");
             break;
+        case eNone:
         default:
             throw std::logic_error("move: default");
             break;
@@ -140,18 +143,6 @@ public:
     }
 };
 
-/// player data
-struct Player {
-    /// Vector of players
-    typedef std::vector<Player> Vector;
-
-    size_t      id;          ///< id of the player (implicit orientation)
-    EDirection  orientation; ///< general direction of the path to exit (explicit orientation)
-    Coords      coords;      ///< coordinates of the player
-    size_t      wallsLeft;   ///< number of walls available for the player
-    bool        bIsAlive;    ///< true while the player is alive
-};
-
 /// wall data for the list of walls
 struct Wall {
     /// Vector of walls
@@ -168,7 +159,7 @@ struct Collision {
     bool bDown;     ///< is there a wall on the bottom of this Cell
     bool bUp;       ///< is there a wall on the top of this Cell
 
-    /// Debug dump (for the bellow generic templeted Matrix::dump() method)
+    /// Debug dump (for the bellow generic templated Matrix::dump() method)
     void dump() const {
         std::cerr << " " << (bLeft ? '<' : ' ') << (bDown ? 'v' : ' ')
                          << (bUp ? '^' : ' ') << (bRight ? '>' : ' ') << " |";
@@ -177,13 +168,13 @@ struct Collision {
 
 /// data of a cell for the matrix of pathfinding
 struct Cell {
-    float       weight;     ///< weighted distance toward the destination
+    size_t      distance;   ///< distance toward the destination
     EDirection  direction;  ///< direction of the shortest/best path
 
-    /// Debug dump (for the bellow generic templeted Matrix::dump() method)
+    /// Debug dump (for the bellow generic templated Matrix::dump() method)
     void dump() const {
-        std::cerr << std::fixed << std::setprecision(1) << std::setw(4) << weight << " "
-                  << toChar(direction) << "|";
+        std::cerr << std::fixed << std::setprecision(1) << std::setw(3) << distance << " "
+                  << toChar(direction) << " |";
     }
 };
 
@@ -218,6 +209,15 @@ public:
         mMatrix.resize(aWidthX);
         for (auto& line : mMatrix) {
             line.resize(aHeightY, aInitValue);
+        }
+    }
+
+    /// Initialize all the matrix with the provided value
+    void init(const TElement& aInitValue) {
+        for (size_t y = 0; y < height(); ++y) {
+            for (size_t x = 0; x < width(); ++x) {
+                set(x, y) = aInitValue;
+            }
         }
     }
 
@@ -272,9 +272,35 @@ private:
     Vector2D mMatrix;    ///< Matrix as a vector of vectors of Elements
 };
 
+/// player data
+struct Player {
+    /// Vector of players
+    typedef std::vector<Player> Vector;
+
+    /// Init the Matrix
+    Player(const size_t aWidthX, const size_t aHeightY) :
+        paths(aWidthX, aHeightY),
+        id(0),
+        orientation(eNone),
+        coords(),
+        wallsLeft(0),
+        order(0),
+        rank(0),
+        bIsAlive(false) {
+    }
+
+    Matrix<Cell>    paths;       ///< grid for pathfinding of the player
+    size_t          id;          ///< id of the player (implicit orientation)
+    EDirection      orientation; ///< general direction of the path to exit (explicit orientation)
+    Coords          coords;      ///< coordinates of the player
+    size_t          wallsLeft;   ///< number of walls available for the player
+    size_t          order;       ///< order of the player into the turn based on its id vs us (we are playing = order 0)
+    size_t          rank;        ///< rank based on the distance left and the order of the player
+    bool            bIsAlive;    ///< true while the player is alive
+};
+
 /// Set a wall into the collision matrix
 void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
-    // TODO(SRombauts) add those walls into the 8x8 matrix of left/right/up/down walls
     if (aWall.orientation == 'H') { // 'H' --
         // x,y-1 x+1,y-1
         // x,y   x+1,y
@@ -293,54 +319,54 @@ void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
 }
 
 /// Recursive shortest path algorithm
-void findShortest(Matrix<Cell>& aMatrix, const Matrix<Collision>& aCollisions, const Player& aPlayer,
-                  const Coords& aCoords, const float aWeight, const EDirection aDirection) {
-    // If the weight ot this path is less than any preceding one on this cell
-    // TODO(SRombauts): in case of equal weight, go into the prefered direction
-    if (    (aMatrix.get(aCoords).weight > aWeight)
-        || ((aMatrix.get(aCoords).weight == aWeight) && (aDirection == aPlayer.orientation))) {
+void findShortest(Player& aPlayer, const Matrix<Collision>& aCollisions,
+                  const Coords& aCoords, const size_t aWeight, const EDirection aDirection) {
+    // If the distance of this path is less than any preceding one on this cell
+    // In case of equal distance, go into the preferred direction (player orientation)
+    if (    (aPlayer.paths.get(aCoords).distance > aWeight)
+        || ((aPlayer.paths.get(aCoords).distance == aWeight) && (aDirection == aPlayer.orientation))) {
         // Update the cell
-        aMatrix.set(aCoords).weight = aWeight;
-        aMatrix.set(aCoords).direction = aDirection;
+        aPlayer.paths.set(aCoords).distance = aWeight;
+        aPlayer.paths.set(aCoords).direction = aDirection;
 
         // Recurse into adjacent cells
         if ((aCoords.x > 0) && (!aCollisions.get(aCoords).bLeft)) {
-            findShortest(aMatrix, aCollisions, aPlayer, aCoords.left(), aWeight + 1.0f, eRight);
+            findShortest(aPlayer, aCollisions, aCoords.left(), aWeight + 1, eRight);
         }
-        if ((aCoords.x < aMatrix.width() - 1) && (!aCollisions.get(aCoords).bRight)) {
-            findShortest(aMatrix, aCollisions, aPlayer, aCoords.right(), aWeight + 1.0f, eLeft);
+        if ((aCoords.x < aPlayer.paths.width() - 1) && (!aCollisions.get(aCoords).bRight)) {
+            findShortest(aPlayer, aCollisions, aCoords.right(), aWeight + 1, eLeft);
         }
         if ((aCoords.y > 0) && (!aCollisions.get(aCoords).bUp)) {
-            findShortest(aMatrix, aCollisions, aPlayer, aCoords.up(), aWeight + 1.0f, eDown);
+            findShortest(aPlayer, aCollisions, aCoords.up(), aWeight + 1, eDown);
         }
-        if ((aCoords.y < aMatrix.height() - 1) && (!aCollisions.get(aCoords).bDown)) {
-            findShortest(aMatrix, aCollisions, aPlayer, aCoords.down(), aWeight + 1.0f, eUp);
+        if ((aCoords.y < aPlayer.paths.height() - 1) && (!aCollisions.get(aCoords).bDown)) {
+            findShortest(aPlayer, aCollisions, aCoords.down(), aWeight + 1, eUp);
         }
     }
 }
-/// Shortest path algorithm TODO(SRombauts): put the Matrix into the Player
-void findShortest(Matrix<Cell>& aMatrix, const Matrix<Collision>& aCollisions, const Player& aPlayer) {
-    const float weight = 0.0f;
+/// Shortest path algorithm
+void findShortest(Player& aPlayer, const Matrix<Collision>& aCollisions) {
+    const size_t distance = 0;
     size_t x;
     size_t y;
 
     switch (aPlayer.id) {
-    case 0: {}
+    case 0:
         x = 8;
-        for (y = 0; y < aMatrix.height(); ++y) {
-            findShortest(aMatrix, aCollisions, aPlayer, Coords{ x, y }, weight, aPlayer.orientation);
+        for (y = 0; y < aPlayer.paths.height(); ++y) {
+            findShortest(aPlayer, aCollisions, Coords{ x, y }, distance, eNone);
         }
         break;
     case 1:
         x = 0;
-        for (y = 0; y < aMatrix.height(); ++y) {
-            findShortest(aMatrix, aCollisions, aPlayer, Coords{ x, y }, weight, aPlayer.orientation);
+        for (y = 0; y < aPlayer.paths.height(); ++y) {
+            findShortest(aPlayer, aCollisions, Coords{ x, y }, distance, eNone);
         }
         break;
     case 2:
         y = 8;
-        for (x = 0; x < aMatrix.width(); ++x) {
-            findShortest(aMatrix, aCollisions, aPlayer, Coords{ x, y }, weight, aPlayer.orientation);
+        for (x = 0; x < aPlayer.paths.width(); ++x) {
+            findShortest(aPlayer, aCollisions, Coords{ x, y }, distance, eNone);
         }
         break;
     default:
@@ -364,7 +390,7 @@ int main() {
     std::cin >> w >> h >> playerCount >> myId; std::cin.ignore();
 
     // all players statuses
-    Player::Vector players(playerCount);
+    Player::Vector players(playerCount, Player(w, h));
     Player& MySelf = players[myId];
 
     // game loop
@@ -417,13 +443,31 @@ int main() {
         std::cerr << "matrix of walls:" << std::endl;
         collisions.dump();
 
-        // TODO(SRombauts) use one grid for pathfinding for each player
-        Matrix<Cell> paths(w, h, Cell{ std::numeric_limits<float>::max(), eRight });
+        std::cerr << "matrices of paths:" << std::endl;
+        // pathfinding for each player (taking walls into account)
+        for (size_t id = 0; id < playerCount; ++id) {
+            players[id].paths.init(Cell{ std::numeric_limits<size_t>::max(), eNone });
+            // if player still playing
+            if (players[id].bIsAlive) {
+                // pathfinding algorithm:
+                findShortest(players[id], collisions);
+                // debug dump:
+                players[id].paths.dump();
+                // debug dump:
+                std::cerr << id << ": distance: " << players[id].paths.get(players[id].coords).distance << std::endl;
+            }
+        }
 
-        // pathfinding algorithm:
-        findShortest(paths, collisions, MySelf);
-        std::cerr << "matrix of paths:" << std::endl;
-        paths.dump();
+        // order of the player into the turn based on its id vs our id (it is our turn, so we have the order 0)
+        for (size_t order = 0; order < playerCount; ++order) {
+           size_t id = (myId + order) % playerCount;
+           players[id].order = order;
+           std::cerr << id << ": order: " << players[id].order << std::endl;
+        }
+
+        // ranking of each player : distance left
+        // TODO(SRombauts) take into account the order of the player into the turn
+        // => std::sort on a couple of data { < distance, order > => player }
 
         // TODO(SRombauts): put walls in time and with intelligence
         if (turn == 6) {
@@ -449,7 +493,7 @@ int main() {
             }
         } else {
             // use the matrix of shortest paths to issue a command
-            EDirection bestDirection = paths.get(MySelf.coords.x, MySelf.coords.y).direction;
+            EDirection bestDirection = MySelf.paths.get(MySelf.coords).direction;
             std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>" << bestDirection << std::endl;
             Command::move(bestDirection);
         }
