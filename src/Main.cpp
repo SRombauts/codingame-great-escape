@@ -276,6 +276,8 @@ private:
 struct Player {
     /// Vector of players
     typedef std::vector<Player> Vector;
+    /// Vector of pointers of players (for sorting by rank)
+    typedef std::vector<Player*> VectorPtr;
 
     /// Init the Matrix
     Player(const size_t aWidthX, const size_t aHeightY) :
@@ -284,6 +286,7 @@ struct Player {
         orientation(eNone),
         coords(),
         wallsLeft(0),
+        distance(0),
         order(0),
         rank(0),
         bIsAlive(false) {
@@ -294,10 +297,20 @@ struct Player {
     EDirection      orientation; ///< general direction of the path to exit (explicit orientation)
     Coords          coords;      ///< coordinates of the player
     size_t          wallsLeft;   ///< number of walls available for the player
+    size_t          distance;    ///< distance left to reach the destination
     size_t          order;       ///< order of the player into the turn based on its id vs us (we are playing = order 0)
     size_t          rank;        ///< rank based on the distance left and the order of the player
     bool            bIsAlive;    ///< true while the player is alive
 };
+
+/// ranking of each player : distance left, and take into account the order of the player into the turn
+static bool comparePlayers(const Player* apA, const Player* apB) {
+    if (apA->distance == apB->distance) {
+        return (apA->order < apB->order);
+    } else  {
+        return (apA->distance < apB->distance);
+    }
+}
 
 /// Set a wall into the collision matrix
 void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
@@ -453,21 +466,30 @@ int main() {
                 findShortest(players[id], collisions);
                 // debug dump:
                 players[id].paths.dump();
+                players[id].distance = players[id].paths.get(players[id].coords).distance;
                 // debug dump:
-                std::cerr << id << ": distance: " << players[id].paths.get(players[id].coords).distance << std::endl;
+                std::cerr << id << ": distance: " << players[id].distance << std::endl;
             }
         }
 
         // order of the player into the turn based on its id vs our id (it is our turn, so we have the order 0)
+        Player::VectorPtr rankedPlayers;
         for (size_t order = 0; order < playerCount; ++order) {
            size_t id = (myId + order) % playerCount;
            players[id].order = order;
            std::cerr << id << ": order: " << players[id].order << std::endl;
+           rankedPlayers.push_back(&players[id]);
         }
 
-        // ranking of each player : distance left
-        // TODO(SRombauts) take into account the order of the player into the turn
-        // => std::sort on a couple of data { < distance, order > => player }
+        // ranking of each player : distance left, and take into account the order of the player into the turn
+        std::cerr << "ranks:" << std::endl;
+        std::sort(rankedPlayers.begin(), rankedPlayers.end(), comparePlayers);
+        for (Player::VectorPtr::const_iterator ipPlayer  = rankedPlayers.begin();
+                                               ipPlayer != rankedPlayers.end();
+                                             ++ipPlayer) {
+            std::cerr << (*ipPlayer)->id << ", ";
+        }
+        std::cerr << std::endl;
 
         // TODO(SRombauts): put walls in time and with intelligence
         if (turn == 6) {
