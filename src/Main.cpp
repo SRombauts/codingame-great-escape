@@ -402,54 +402,53 @@ bool putWall(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWalls,
 }
 
 /// Recursive shortest path algorithm
-void findShortest(Player& aPlayer, const Matrix<Collision>& aCollisions,
-                  const Coords& aCoords, const size_t aWeight, const EDirection aDirection) {
+void findShortest(Matrix<Cell>& aMatrix, const EDirection aOrientation, const Matrix<Collision>& aCollisions,
+                  const Coords& aCoords, const size_t aDistance, const EDirection aDirection) {
     // If the distance of this path is less than any preceding one on this cell
     // In case of equal distance, go into the preferred direction (player orientation)
-    if (    (aPlayer.paths.get(aCoords).distance > aWeight)
-        || ((aPlayer.paths.get(aCoords).distance == aWeight) && (aDirection == aPlayer.orientation))) {
+    if (    (aMatrix.get(aCoords).distance > aDistance)
+        || ((aMatrix.get(aCoords).distance == aDistance) && (aDirection == aOrientation))) {
         // Update the cell
-        aPlayer.paths.set(aCoords).distance = aWeight;
-        aPlayer.paths.set(aCoords).direction = aDirection;
+        aMatrix.set(aCoords).distance = aDistance;
+        aMatrix.set(aCoords).direction = aDirection;
 
         // Recurse into adjacent cells
         if ((aCoords.x > 0) && (!aCollisions.get(aCoords).bLeft)) {
-            findShortest(aPlayer, aCollisions, aCoords.left(), aWeight + 1, eRight);
+            findShortest(aMatrix, aOrientation, aCollisions, aCoords.left(), aDistance + 1, eRight);
         }
-        if ((aCoords.x < aPlayer.paths.width()-1) && (!aCollisions.get(aCoords).bRight)) {
-            findShortest(aPlayer, aCollisions, aCoords.right(), aWeight + 1, eLeft);
+        if ((aCoords.x < aMatrix.width()-1) && (!aCollisions.get(aCoords).bRight)) {
+            findShortest(aMatrix, aOrientation, aCollisions, aCoords.right(), aDistance + 1, eLeft);
         }
         if ((aCoords.y > 0) && (!aCollisions.get(aCoords).bUp)) {
-            findShortest(aPlayer, aCollisions, aCoords.up(), aWeight + 1, eDown);
+            findShortest(aMatrix, aOrientation, aCollisions, aCoords.up(), aDistance + 1, eDown);
         }
-        if ((aCoords.y < aPlayer.paths.height()-1) && (!aCollisions.get(aCoords).bDown)) {
-            findShortest(aPlayer, aCollisions, aCoords.down(), aWeight + 1, eUp);
+        if ((aCoords.y < aMatrix.height()-1) && (!aCollisions.get(aCoords).bDown)) {
+            findShortest(aMatrix, aOrientation, aCollisions, aCoords.down(), aDistance + 1, eUp);
         }
     }
 }
 /// Shortest path algorithm
-void findShortest(Player& aPlayer, const Matrix<Collision>& aCollisions) {
-    const size_t distance = 0;
+void findShortest(Matrix<Cell>& aMatrix, const EDirection aOrientation, const Matrix<Collision>& aCollisions) {
     size_t x;
     size_t y;
 
-    switch (aPlayer.id) {
-    case 0:
+    switch (aOrientation) {
+    case eRight:
         x = 8;
-        for (y = 0; y < aPlayer.paths.height(); ++y) {
-            findShortest(aPlayer, aCollisions, Coords{ x, y }, distance, eNone);
+        for (y = 0; y < aMatrix.height(); ++y) {
+            findShortest(aMatrix, aOrientation, aCollisions, Coords{ x, y }, 0, eNone);
         }
         break;
-    case 1:
+    case eLeft:
         x = 0;
-        for (y = 0; y < aPlayer.paths.height(); ++y) {
-            findShortest(aPlayer, aCollisions, Coords{ x, y }, distance, eNone);
+        for (y = 0; y < aMatrix.height(); ++y) {
+            findShortest(aMatrix, aOrientation, aCollisions, Coords{ x, y }, 0, eNone);
         }
         break;
-    case 2:
+    case eDown:
         y = 8;
-        for (x = 0; x < aPlayer.paths.width(); ++x) {
-            findShortest(aPlayer, aCollisions, Coords{ x, y }, distance, eNone);
+        for (x = 0; x < aMatrix.width(); ++x) {
+            findShortest(aMatrix, aOrientation, aCollisions, Coords{ x, y }, 0, eNone);
         }
         break;
     default:
@@ -534,7 +533,7 @@ int main() {
             // if player still playing
             if (players[id].bIsAlive) {
                 // pathfinding algorithm:
-                findShortest(players[id], collisions);
+                findShortest(players[id].paths, players[id].orientation, collisions);
                 // debug dump:
             //  players[id].paths.dump();
                 players[id].distance = players[id].paths.get(players[id].coords).distance;
