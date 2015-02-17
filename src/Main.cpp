@@ -374,6 +374,8 @@ bool isCompatible(const Matrix<Cell>& aMatrix, const Wall& aWall) {
             bIsCompatible = false;
         }
     }
+    std::cerr << "isCompatible(" << aWall.coords.x << ", " << aWall.coords.y << ", " << aWall.orientation << ")="
+              << bIsCompatible << std::endl;
     return bIsCompatible;
 }
 
@@ -385,6 +387,7 @@ bool isCompatible(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWall
         bIsCompatible = isCompatible(*iWall, aWall);
         ++iWall;
     }
+    std::cerr << "isCompatible()=" << bIsCompatible << std::endl;
     return bIsCompatible;
 }
 
@@ -471,7 +474,7 @@ int main() {
 
     // all players statuses
     Player::Vector players(playerCount, Player(w, h));
-    Player& MySelf = players[myId];
+    Player& mySelf = players[myId];
 
     // game loop
     for (size_t turn = 0; turn < 100; ++turn) {
@@ -517,11 +520,11 @@ int main() {
             setWall(collisions, walls[idx]);
         }
 
-        std::cerr << "turn " << turn << std::endl;
+    //  std::cerr << "turn " << turn << std::endl;
 
         // debug dump:
         std::cerr << "matrix of walls:" << std::endl;
-        collisions.dump();
+    //  collisions.dump();
 
         std::cerr << "matrices of paths:" << std::endl;
         // pathfinding for each player (taking walls into account)
@@ -533,7 +536,7 @@ int main() {
                 // pathfinding algorithm:
                 findShortest(players[id], collisions);
                 // debug dump:
-                players[id].paths.dump();
+            //  players[id].paths.dump();
                 players[id].distance = players[id].paths.get(players[id].coords).distance;
                 // debug dump:
                 std::cerr << id << ": distance: " << players[id].distance << std::endl;
@@ -573,8 +576,8 @@ int main() {
         // TODO(SRombauts): put walls in with intelligence
         bool bNewWall = false;
 
-        // for now, only put a wall if I am not the first ranked one
-        if (!playersBeforeMe.empty()) {
+        // for now, only put a wall if I am not the first ranked one (and we have walls left!)
+        if ((!playersBeforeMe.empty()) && (mySelf.wallsLeft > 0)) {
             const Player& player = players[playersBeforeMe[0]->id];
             std::cerr << "playersBeforeMe[0]=" << player.id << " distance=" << player.distance << std::endl;
             // and only after the middle of the board
@@ -610,12 +613,10 @@ int main() {
 
         if (false == bNewWall) {
             // use the matrix of shortest paths to issue a command
-            EDirection bestDirection = MySelf.paths.get(MySelf.coords).direction;
-            std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>'" << toChar(bestDirection) << "'\n";
+            EDirection bestDirection = mySelf.paths.get(mySelf.coords).direction;
+            std::cerr << "[" << mySelf.coords.x << ", " << mySelf.coords.y << "]=>'" << toChar(bestDirection) << "'\n";
             Command::move(bestDirection);
         }
-
-        // return 1; // for debug purpose
     }
 
     return 0;
