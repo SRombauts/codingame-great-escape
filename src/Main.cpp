@@ -166,8 +166,8 @@ struct Collision {
 
     /// Debug dump (for the bellow generic templated Matrix::dump() method)
     void dump() const {
-        std::cerr << " " << (bLeft ? '<' : ' ') << (bDown ? 'v' : ' ')
-                         << (bUp ? '^' : ' ') << (bRight ? '>' : ' ') << " |";
+        std::cerr << (bLeft ? '<' : ' ') << (bDown ? 'v' : ' ')
+                  << (bUp ? '^' : ' ') << (bRight ? '>' : ' ') << "|";
     }
 };
 
@@ -178,8 +178,8 @@ struct Cell {
 
     /// Debug dump (for the bellow generic templated Matrix::dump() method)
     void dump() const {
-        std::cerr << std::fixed << std::setprecision(1) << std::setw(3) << distance << " "
-                  << toChar(direction) << " |";
+        std::cerr << std::fixed << std::setprecision(1) << std::setw(2) << distance << " "
+                  << toChar(direction) << "|";
     }
 };
 
@@ -256,7 +256,7 @@ public:
     void dump() {
         std::cerr << " |";
         for (size_t x = 0; x < width(); ++x) {
-            std::cerr << x << "     |";
+            std::cerr << x << "   |";
         }
         std::cerr << std::endl;
         for (size_t y = 0; y < height(); ++y) {
@@ -339,57 +339,63 @@ void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
 
 /// Test compatibility of a new wall against a wall already on the board
 bool isCompatible(const Wall& aExistingWall, const Wall& aNewWall) {
-    bool bCompatible = true;
+    bool bIsCompatible = true;
     if (aExistingWall.orientation == 'H') {
         if        ((aNewWall.orientation == 'H')
                &&    ((aExistingWall.coords.left()  == aNewWall.coords)
                    || (aExistingWall.coords         == aNewWall.coords)
                    || (aExistingWall.coords.right() == aNewWall.coords))) {
-            bCompatible = false;
+            bIsCompatible = false;
         } else if ((aNewWall.orientation == 'V') && (aExistingWall.coords.upright() == aNewWall.coords)) {
-            bCompatible = false;
+            bIsCompatible = false;
         }
     } else { // gWall.orientation == 'V'
         if        ((aNewWall.orientation == 'V')
                &&   ((aExistingWall.coords.up()     == aNewWall.coords)
                   || (aExistingWall.coords          == aNewWall.coords)
                   || (aExistingWall.coords.down()   == aNewWall.coords))) {
-            bCompatible = false;
+            bIsCompatible = false;
         } else if ((aNewWall.orientation == 'H') && ((aExistingWall.coords.downleft() == aNewWall.coords))) { // 'V'
-            bCompatible = false;
+            bIsCompatible = false;
         }
     }
-    return bCompatible;
+    return bIsCompatible;
 }
 
 /// Test compatibility of a new wall based solely on coordinates
 bool isCompatible(const Matrix<Cell>& aMatrix, const Wall& aWall) {
-    bool bCompatible = true;
-
+    bool bIsCompatible = true;
     if (aWall.orientation == 'H') {
         if ((aWall.coords.x >= aMatrix.width()-1) || (aWall.coords.y == 0) || (aWall.coords.y > aMatrix.height())) {
-            bCompatible = false;
+            bIsCompatible = false;
         }
     } else { // .orientation == 'V'
         if ((aWall.coords.y >= aMatrix.height()-1) || (aWall.coords.x == 0) || (aWall.coords.x > aMatrix.width())) {
-            bCompatible = false;
+            bIsCompatible = false;
         }
     }
-
-    return bCompatible;
+    return bIsCompatible;
 }
 
 /// Test compatibility of a new wall against all walls already on the board
 bool isCompatible(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWalls, const Wall& aWall) {
-    bool bCompatible = isCompatible(aMatrix, aWall);
-
+    bool bIsCompatible = isCompatible(aMatrix, aWall);
     Wall::Vector::const_iterator iWall = aExistingWalls.begin();
-    while ((iWall != aExistingWalls.end()) && (bCompatible == true)) {
-        bCompatible = isCompatible(*iWall, aWall);
+    while ((iWall != aExistingWalls.end()) && (bIsCompatible == true)) {
+        bIsCompatible = isCompatible(*iWall, aWall);
         ++iWall;
     }
+    return bIsCompatible;
+}
 
-    return bCompatible;
+/// Put a wall if possible
+bool putWall(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWalls,
+             const Wall& aWall, const char* apMessage) {
+    bool bIsCompatible = isCompatible(aMatrix, aExistingWalls, aWall);
+    if (bIsCompatible) {
+        Command::put(aWall.coords, aWall.orientation, apMessage);
+    }
+    return bIsCompatible;
 }
 
 /// Recursive shortest path algorithm
@@ -520,6 +526,7 @@ int main() {
         std::cerr << "matrices of paths:" << std::endl;
         // pathfinding for each player (taking walls into account)
         for (size_t id = 0; id < playerCount; ++id) {
+            // re-init pathfinding data
             players[id].paths.init(Cell{ std::numeric_limits<size_t>::max(), eNone });
             // if player still playing
             if (players[id].bIsAlive) {
@@ -530,6 +537,8 @@ int main() {
                 players[id].distance = players[id].paths.get(players[id].coords).distance;
                 // debug dump:
                 std::cerr << id << ": distance: " << players[id].distance << std::endl;
+            } else {
+                players[id].distance = std::numeric_limits<size_t>::max(); // dead player is far far away...
             }
         }
 
@@ -552,29 +561,54 @@ int main() {
         }
         std::cerr << std::endl;
 
-        // TODO(SRombauts): replace this to put walls in time and with intelligence
-        if (turn == 6) {
-            // for now, only put one wall at the last minute (only way to keep it safe)
-            if ((myId != 0) && (players[0].bIsAlive)) {
-                if (players[0].coords.y < h - 2) {
-                    Command::put(players[0].coords.right(), 'V', "stop here");
-                } else {
-                    Command::put(players[0].coords.upright(), 'V', "stop there");
-                }
-            } else if ((myId != 1) && (players[1].bIsAlive)) {
-                if (players[1].coords.y < h - 2) {
-                    Command::put(players[1].coords, 'V', "stop here");
-                } else {
-                    Command::put(players[1].coords.up(), 'V', "stop there");
-                }
-            } else {
-                if (players[2].coords.x < w - 2) {
-                    Command::put(players[2].coords.down(), 'H', "stop here");
-                } else {
-                    Command::put(players[2].coords.downleft(), 'H', "stop there");
+        // list of player before me based on ranking
+        Player::VectorPtr   playersBeforeMe;
+        if (rankedPlayers[0]->id != myId) {
+            playersBeforeMe.push_back(rankedPlayers[0]);
+            if (rankedPlayers[1]->id != myId) {
+                playersBeforeMe.push_back(rankedPlayers[0]);
+            }
+        }
+
+        // TODO(SRombauts): put walls in with intelligence
+        bool bNewWall = false;
+
+        // for now, only put a wall if I am not the first ranked one
+        if (!playersBeforeMe.empty()) {
+            const Player& player = players[playersBeforeMe[0]->id];
+            std::cerr << "playersBeforeMe[0]=" << player.id << " distance=" << player.distance << std::endl;
+            // and only after the middle of the board
+            if (playersBeforeMe[0]->distance < 5) {
+                switch (player.id) {
+                case 0:
+                    if (player.coords.y < h - 2) {
+                        bNewWall = putWall(player.paths, walls, Wall{player.coords.right(), 'V'}, "stop here");
+                    } else {
+                        bNewWall = putWall(player.paths, walls, Wall{player.coords.upright(), 'V'}, "stop there");
+                    }
+                    break;
+                case 1:
+                    if (player.coords.y < h - 2) {
+                        bNewWall = putWall(player.paths, walls, Wall{player.coords, 'V'}, "you shall not pass");
+                    } else {
+                        bNewWall = putWall(player.paths, walls, Wall{player.coords.up(), 'V'}, "don't move");
+                    }
+                    break;
+                case 2:
+                    if (player.coords.x < w - 2) {
+                        bNewWall = putWall(player.paths, walls, Wall{player.coords.down(), 'H'}, "halt!");
+                    } else {
+                        bNewWall = putWall(player.paths, walls, Wall{player.coords.downleft(), 'H'}, "wait!");
+                    }
+                    break;
+                default:
+                    throw std::logic_error("id > 2");
+                    break;
                 }
             }
-        } else {
+        }
+
+        if (false == bNewWall) {
             // use the matrix of shortest paths to issue a command
             EDirection bestDirection = MySelf.paths.get(MySelf.coords).direction;
             std::cerr << "[" << MySelf.coords.x << ", " << MySelf.coords.y << "]=>'" << toChar(bestDirection) << "'\n";
