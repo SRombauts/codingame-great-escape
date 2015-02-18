@@ -583,24 +583,21 @@ int main() {
             if (playersBeforeMe[0]->distance < 5) {
                 switch (player.id) {
                 case 0:
-                    if (player.coords.y < h - 2) {
-                        bNewWall = putWall(player.paths, walls, Wall{player.coords.right(), 'V'}, "stop here");
-                    } else {
+                    bNewWall = putWall(player.paths, walls, Wall{player.coords.right(), 'V'}, "stop here");
+                    if (!bNewWall) {
                         bNewWall = putWall(player.paths, walls, Wall{player.coords.upright(), 'V'}, "stop there");
                     }
                     break;
                 case 1:
-                    if (player.coords.y < h - 2) {
-                        bNewWall = putWall(player.paths, walls, Wall{player.coords, 'V'}, "you shall not pass");
-                    } else {
-                        bNewWall = putWall(player.paths, walls, Wall{player.coords.up(), 'V'}, "don't move");
+                    bNewWall = putWall(player.paths, walls, Wall{player.coords, 'V'}, "you shall not pass");
+                    if (!bNewWall) {
+                        bNewWall = putWall(player.paths, walls, Wall{ player.coords.up(), 'V' }, "don't move");
                     }
                     break;
                 case 2:
-                    if (player.coords.x < w - 2) {
-                        bNewWall = putWall(player.paths, walls, Wall{player.coords.down(), 'H'}, "halt!");
-                    } else {
-                        bNewWall = putWall(player.paths, walls, Wall{player.coords.downleft(), 'H'}, "wait!");
+                    bNewWall = putWall(player.paths, walls, Wall{player.coords.down(), 'H'}, "halt!");
+                    if (!bNewWall) {
+                        bNewWall = putWall(player.paths, walls, Wall{ player.coords.downleft(), 'H' }, "wait!");
                     }
                     break;
                 default:
