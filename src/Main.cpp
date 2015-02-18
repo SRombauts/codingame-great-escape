@@ -2,7 +2,9 @@
  * @file    Main.cpp
  * @brief   My attempt at the Multiplayer CodinGame "The Great Escape".
  *
- * Copyright (c) 2015 Sebastien Rombauts (sebastien.rombauts@gmail.com)
+ * Copyright (c) 2015 Sebastien Rombauts (sebastien.rombauts@gmail.com, http://srombauts.github.io)
+ *
+ * Original source code available at GitHub https://github.com/SRombauts/codingame-great-escape
  *
  * Distributed under the MIT License (MIT) (See accompanying file LICENSE.txt
  * or copy at http://opensource.org/licenses/MIT)
@@ -15,6 +17,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include <chrono> // NOLINT(build/c++11)
 
 /// Define directions
 enum EDirection {
@@ -308,6 +311,24 @@ struct Player {
     bool            bIsAlive;    ///< true while the player is alive
 };
 
+/// Time measure using C++11 std::chrono
+class Measure {
+public:
+    /// Start a time measure
+    void start() {
+        // std::chrono::steady_clock would be more stable, but does not exist in Travis CI GCC 4.6
+        mStartTime = std::chrono::high_resolution_clock::now();
+    }
+    /// Get time elapsed since first time measure
+    double get() {
+        auto diffTime = (std::chrono::high_resolution_clock::now() - mStartTime);
+        return std::chrono::duration<double, std::milli>(diffTime).count();
+    }
+
+private:
+    std::chrono::high_resolution_clock::time_point   mStartTime; ///< Store the first time measure
+};
+
 /// ranking of each player : distance left, and take into account the order of the player into the turn
 static bool comparePlayers(const Player* apA, const Player* apB) {
     if (apA->distance != apB->distance) {
@@ -476,9 +497,11 @@ int main() {
     // all players statuses
     Player::Vector players(playerCount, Player(w, h));
     Player& mySelf = players[myId];
+    Measure measure;
 
     // game loop
     for (size_t turn = 0; turn < 100; ++turn) {
+        // wait and read players data
         for (size_t id = 0; id < playerCount; ++id) {
             int x; // x-coordinate of the player
             int y; // y-coordinate of the player
@@ -500,7 +523,7 @@ int main() {
                     std::cerr << "myself(" << players[id].id << "): [" << players[id].coords.x
                               << ", " << players[id].coords.y << "] (wallsLeft=" << players[id].wallsLeft << ")\n";
                 } else {
-                     std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
+                    std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
                               << ", " << players[id].coords.y << "] (wallsLeft=" << players[id].wallsLeft << ")\n";
                 }
             } else {
@@ -509,7 +532,8 @@ int main() {
             }
         }
 
-        size_t          wallCount; // number of walls on the board
+        // read walls data
+        size_t wallCount; // number of walls on the board
         std::cin >> wallCount; std::cin.ignore();
 
         Wall::Vector        walls(wallCount);
@@ -520,6 +544,9 @@ int main() {
                       << walls[idx].orientation <<"'\n";
             setWall(collisions, walls[idx]);
         }
+
+        // Start-counting the time after the input are all read
+        measure.start();
 
     //  std::cerr << "turn " << turn << std::endl;
 
@@ -615,6 +642,9 @@ int main() {
             std::cerr << "[" << mySelf.coords.x << ", " << mySelf.coords.y << "]=>'" << toChar(bestDirection) << "'\n";
             Command::move(bestDirection);
         }
+
+        // Calculate the time elapsed since start of this turn
+        std::cerr << std::fixed << measure.get() << "ms\n";
     }
 
     return 0;
