@@ -94,6 +94,24 @@ struct Coords {
         return Coords{ x - 1, y - 1 };
     }
 
+    /// get next coordinates into the specified direction
+    Coords next(EDirection aDirection) {
+        switch (aDirection) {
+        case eRight:
+            return right();
+        case eLeft:
+            return left();
+        case eDown:
+            return down();
+        case eUp:
+            return up();
+        case eNone:
+        default:
+            throw std::logic_error("walls: default");
+            break;
+        }
+    }
+
     /// Comparaison operator
     bool operator== (const Coords& aCoords) const {
         return ((x == aCoords.x) && (y == aCoords.y));
@@ -222,9 +240,9 @@ public:
 
     /// Initialize all the matrix with the provided value
     void init(const TElement& aInitValue) {
-        for (size_t y = 0; y < height(); ++y) {
-            for (size_t x = 0; x < width(); ++x) {
-                set(x, y) = aInitValue;
+        for (auto& line : mMatrix) {
+            for (auto& cell : line) {
+                cell = aInitValue;
             }
         }
     }
@@ -291,6 +309,7 @@ struct Player {
     Player(const size_t aWidthX, const size_t aHeightY) :
         paths(aWidthX, aHeightY),
         id(0),
+        bIsMySelf(false),
         orientation(eNone),
         coords(),
         wallsLeft(0),
@@ -302,11 +321,12 @@ struct Player {
 
     Matrix<Cell>    paths;       ///< grid for pathfinding of the player
     size_t          id;          ///< id of the player (implicit orientation)
+    bool            bIsMySelf;   ///< explicite shortcut for (id == myId) and/or (order == 0)
     EDirection      orientation; ///< general direction of the path to exit (explicit orientation)
     Coords          coords;      ///< coordinates of the player
     size_t          wallsLeft;   ///< number of walls available for the player
     size_t          distance;    ///< distance left to reach the destination
-    size_t          order;       ///< order of the player into the turn based on its id vs us (we are playing = order 0)
+    size_t          order;       ///< order of the player into the turn based on its id vs me (I am playing = order 0)
     size_t          rank;        ///< rank based on the distance left and the order of the player
     bool            bIsAlive;    ///< true while the player is alive
 };
@@ -338,22 +358,80 @@ static bool comparePlayers(const Player* apA, const Player* apB) {
     }
 }
 
+/// Recursive shortest path algorithm
+void findShortest(Matrix<Cell>& aOutPaths, const Matrix<Collision>& aCollisions, const EDirection aOrientation,
+    const Coords& aCoords, const size_t aDistance, const EDirection aDirection) {
+    // If the distance of this path is less than any preceding one on this cell
+    // In case of equal distance, go into the preferred direction (player orientation)
+    if ((aOutPaths.get(aCoords).distance > aDistance)
+        || ((aOutPaths.get(aCoords).distance == aDistance) && (aDirection == aOrientation))) {
+        // Update the cell
+        aOutPaths.set(aCoords).distance = aDistance;
+        aOutPaths.set(aCoords).direction = aDirection;
+
+        // Recurse into adjacent cells
+        if ((aCoords.x > 0) && (!aCollisions.get(aCoords).bLeft)) {
+            findShortest(aOutPaths, aCollisions, aOrientation, aCoords.left(), aDistance + 1, eRight);
+        }
+        if ((aCoords.x < aOutPaths.width() - 1) && (!aCollisions.get(aCoords).bRight)) {
+            findShortest(aOutPaths, aCollisions, aOrientation, aCoords.right(), aDistance + 1, eLeft);
+        }
+        if ((aCoords.y > 0) && (!aCollisions.get(aCoords).bUp)) {
+            findShortest(aOutPaths, aCollisions, aOrientation, aCoords.up(), aDistance + 1, eDown);
+        }
+        if ((aCoords.y < aOutPaths.height() - 1) && (!aCollisions.get(aCoords).bDown)) {
+            findShortest(aOutPaths, aCollisions, aOrientation, aCoords.down(), aDistance + 1, eUp);
+        }
+    }
+}
+/// Shortest path algorithm
+void findShortest(Matrix<Cell>& aOutPaths, const Matrix<Collision>& aCollisions, const EDirection aOrientation) {
+    size_t x;
+    size_t y;
+
+    switch (aOrientation) {
+    case eRight:
+        x = 8;
+        for (y = 0; y < aOutPaths.height(); ++y) {
+            findShortest(aOutPaths, aCollisions, aOrientation, Coords{ x, y }, 0, eNone);
+        }
+        break;
+    case eLeft:
+        x = 0;
+        for (y = 0; y < aOutPaths.height(); ++y) {
+            findShortest(aOutPaths, aCollisions, aOrientation, Coords{ x, y }, 0, eNone);
+        }
+        break;
+    case eDown:
+        y = 8;
+        for (x = 0; x < aOutPaths.width(); ++x) {
+            findShortest(aOutPaths, aCollisions, aOrientation, Coords{ x, y }, 0, eNone);
+        }
+        break;
+    case eUp:
+    case eNone:
+    default:
+        throw std::logic_error("shortest: default");
+        break;
+    }
+}
+
 /// Set a wall into the collision matrix
-void addWallCollisions(Matrix<Collision>& aCollisions, const Wall& aWall) {
+void addWallCollisions(Matrix<Collision>& aOutCollisions, const Wall& aWall, const bool abValue = true) {
     if (aWall.orientation == 'H') { // 'H' --
         // x,y-1 x+1,y-1
         // x,y   x+1,y
-        aCollisions.set(aWall.coords.up())     .bDown = true;
-        aCollisions.set(aWall.coords.upright()).bDown = true;
-        aCollisions.set(aWall.coords)          .bUp   = true;
-        aCollisions.set(aWall.coords.right())  .bUp   = true;
+        aOutCollisions.set(aWall.coords.up())     .bDown = abValue;
+        aOutCollisions.set(aWall.coords.upright()).bDown = abValue;
+        aOutCollisions.set(aWall.coords)          .bUp   = abValue;
+        aOutCollisions.set(aWall.coords.right())  .bUp   = abValue;
     } else { // .orientation == 'V'
         // x-1,y   x,y
         // x-1,y-1 x,y-1
-        aCollisions.set(aWall.coords.left()).bRight     = true;
-        aCollisions.set(aWall.coords.downleft()).bRight = true;
-        aCollisions.set(aWall.coords).bLeft             = true;
-        aCollisions.set(aWall.coords.down()).bLeft      = true;
+        aOutCollisions.set(aWall.coords.left()).bRight     = abValue;
+        aOutCollisions.set(aWall.coords.downleft()).bRight = abValue;
+        aOutCollisions.set(aWall.coords).bLeft             = abValue;
+        aOutCollisions.set(aWall.coords.down()).bLeft      = abValue;
     }
 }
 
@@ -384,14 +462,14 @@ bool isCompatible(const Wall& aExistingWall, const Wall& aNewWall) {
 }
 
 /// Test compatibility of a new wall based solely on coordinates
-bool isCompatible(const Matrix<Cell>& aMatrix, const Wall& aWall) {
+bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall& aWall) {
     bool bIsCompatible = true;
     if (aWall.orientation == 'H') {
-        if ((aWall.coords.x >= aMatrix.width()-1) || (aWall.coords.y == 0) || (aWall.coords.y > aMatrix.height())) {
+        if ((aWall.coords.x >= aWidthX - 1) || (aWall.coords.y == 0) || (aWall.coords.y > aHeightY)) {
             bIsCompatible = false;
         }
     } else { // .orientation == 'V'
-        if ((aWall.coords.y >= aMatrix.height()-1) || (aWall.coords.x == 0) || (aWall.coords.x > aMatrix.width())) {
+        if ((aWall.coords.y >= aHeightY - 1) || (aWall.coords.x == 0) || (aWall.coords.x > aWidthX)) {
             bIsCompatible = false;
         }
     }
@@ -401,8 +479,8 @@ bool isCompatible(const Matrix<Cell>& aMatrix, const Wall& aWall) {
 }
 
 /// Test compatibility of a new wall against all walls already on the board
-bool isCompatible(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWalls, const Wall& aWall) {
-    bool bIsCompatible = isCompatible(aMatrix, aWall);
+bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall::Vector& aExistingWalls, const Wall& aWall) {
+    bool bIsCompatible = isCompatible(aWidthX, aHeightY, aWall);
     Wall::Vector::const_iterator iWall = aExistingWalls.begin();
     while ((iWall != aExistingWalls.end()) && (bIsCompatible == true)) {
         bIsCompatible = isCompatible(*iWall, aWall);
@@ -412,71 +490,60 @@ bool isCompatible(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWall
     return bIsCompatible;
 }
 
-/// Put a wall if possible
-bool putWall(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWalls,
-             const Wall& aWall, const char* apMessage) {
-    bool bIsCompatible = isCompatible(aMatrix, aExistingWalls, aWall);
+/// Evaluation of impacts of the placement of a wall
+struct Evaluation {
+    bool    bIsValid;       ///< Does this structure represent a valide result (no player blocked)
+    Wall    wall;           ///< Wall to evaluate
+    size_t  impactOnFirst;  ///< Increase of distance on the shortest path of the first player
+    size_t  impactOnMySelf; ///< Increase of distance on the shortest path of myself
+    size_t  impactOnOther;  ///< Increase of distance on the shortest path of the other player if any
+
+    /// evaluation of the best result to keep
+    bool operator< (const Evaluation& aEvaluation) {
+        // TODO(SRombauts) take into account impactOnMySelf, and then impactOnOther
+        return (impactOnFirst > aEvaluation.impactOnFirst);
+    }
+};
+
+/// Evaluation of all impacts of a wall
+void evalWall(Matrix<Cell>& aPaths, Matrix<Collision>& aCollisions,
+              const Player::Vector& aPlayers, const Wall::Vector& aExistingWalls,
+              const Wall& aWall, Evaluation& aBestEval) {
+    bool bIsCompatible = isCompatible(aPaths.width(), aPaths.height(), aExistingWalls, aWall);
     if (bIsCompatible) {
-        Command::put(aWall, apMessage);
-    }
-    return bIsCompatible;
-}
+        Evaluation eval;
+        eval.bIsValid = true;
 
-/// Recursive shortest path algorithm
-void findShortest(Matrix<Cell>& aMatrix, const EDirection aOrientation, const Matrix<Collision>& aCollisions,
-                  const Coords& aCoords, const size_t aDistance, const EDirection aDirection) {
-    // If the distance of this path is less than any preceding one on this cell
-    // In case of equal distance, go into the preferred direction (player orientation)
-    if (    (aMatrix.get(aCoords).distance > aDistance)
-        || ((aMatrix.get(aCoords).distance == aDistance) && (aDirection == aOrientation))) {
-        // Update the cell
-        aMatrix.set(aCoords).distance = aDistance;
-        aMatrix.set(aCoords).direction = aDirection;
+        addWallCollisions(aCollisions, aWall, true);    // set
 
-        // Recurse into adjacent cells
-        if ((aCoords.x > 0) && (!aCollisions.get(aCoords).bLeft)) {
-            findShortest(aMatrix, aOrientation, aCollisions, aCoords.left(), aDistance + 1, eRight);
+        for (const auto& player : aPlayers) {
+            if (player.bIsAlive) {
+                aPaths.init(Cell{std::numeric_limits<size_t>::max(), eNone});
+                findShortest(aPaths, aCollisions, player.orientation);
+                const size_t nextDistance = aPaths.get(player.coords).distance;
+                std::cerr << "nextDistance(" << player.id << "[" << player.coords.x << "," << player.coords.y << "])="
+                          << nextDistance << std::endl;
+                if (nextDistance < std::numeric_limits<size_t>::max()) {
+                    if (player.rank == 0) {
+                        eval.impactOnFirst    = (nextDistance - player.distance);
+                    } else if (player.bIsMySelf) {
+                        eval.impactOnMySelf   = (nextDistance - player.distance);
+                    } else {
+                        eval.impactOnOther    = (nextDistance - player.distance);
+                    }
+                } else {
+                    eval.bIsValid = false;
+                }
+            }
         }
-        if ((aCoords.x < aMatrix.width()-1) && (!aCollisions.get(aCoords).bRight)) {
-            findShortest(aMatrix, aOrientation, aCollisions, aCoords.right(), aDistance + 1, eLeft);
+        // evaluation of the result to keep the best
+        if ((aBestEval < eval) || (!aBestEval.bIsValid)) {
+            std::cerr << "new best eval" << std::endl;
+            eval.wall = aWall;
+            aBestEval = eval;
         }
-        if ((aCoords.y > 0) && (!aCollisions.get(aCoords).bUp)) {
-            findShortest(aMatrix, aOrientation, aCollisions, aCoords.up(), aDistance + 1, eDown);
-        }
-        if ((aCoords.y < aMatrix.height()-1) && (!aCollisions.get(aCoords).bDown)) {
-            findShortest(aMatrix, aOrientation, aCollisions, aCoords.down(), aDistance + 1, eUp);
-        }
-    }
-}
-/// Shortest path algorithm
-void findShortest(Matrix<Cell>& aMatrix, const EDirection aOrientation, const Matrix<Collision>& aCollisions) {
-    size_t x;
-    size_t y;
 
-    switch (aOrientation) {
-    case eRight:
-        x = 8;
-        for (y = 0; y < aMatrix.height(); ++y) {
-            findShortest(aMatrix, aOrientation, aCollisions, Coords{ x, y }, 0, eNone);
-        }
-        break;
-    case eLeft:
-        x = 0;
-        for (y = 0; y < aMatrix.height(); ++y) {
-            findShortest(aMatrix, aOrientation, aCollisions, Coords{ x, y }, 0, eNone);
-        }
-        break;
-    case eDown:
-        y = 8;
-        for (x = 0; x < aMatrix.width(); ++x) {
-            findShortest(aMatrix, aOrientation, aCollisions, Coords{ x, y }, 0, eNone);
-        }
-        break;
-    case eUp:
-    case eNone:
-    default:
-        throw std::logic_error("shortest: default");
-        break;
+        addWallCollisions(aCollisions, aWall, false);   // reset
     }
 }
 
@@ -497,37 +564,40 @@ int main() {
     // all players statuses
     Player::Vector players(playerCount, Player(w, h));
     Player& mySelf = players[myId];
+    mySelf.bIsMySelf = true;
     Measure measure;
 
     // game loop
     for (size_t turn = 0; turn < 100; ++turn) {
         // wait and read players data
         for (size_t id = 0; id < playerCount; ++id) {
+            Player& player = players[id];
+
             int x; // x-coordinate of the player
             int y; // y-coordinate of the player
             size_t wallsLeft; // number of walls available for the player
             std::cin >> x >> y >> wallsLeft; std::cin.ignore();
 
-            players[id].id          = id;               // redundant with the index, but useful
-            players[id].orientation = fromPlayerId(id); // redundant with the id, but useful
-            players[id].wallsLeft   = wallsLeft;
+            player.id          = id;               // redundant with the index, but useful
+            player.orientation = fromPlayerId(id); // redundant with the id, but useful
+            player.wallsLeft   = wallsLeft;
 
             // if player still playing
             if ((x >= 0) && (y >= 0)) {
-                players[id].coords.x = static_cast<size_t>(x);
-                players[id].coords.y = static_cast<size_t>(y);
-                players[id].bIsAlive = true;
+                player.coords.x = static_cast<size_t>(x);
+                player.coords.y = static_cast<size_t>(y);
+                player.bIsAlive = true;
 
                 // debug:
-                if (id == myId) {
-                    std::cerr << "myself(" << players[id].id << "): [" << players[id].coords.x
-                              << ", " << players[id].coords.y << "] (wallsLeft=" << players[id].wallsLeft << ")\n";
+                if (player.bIsMySelf) {
+                    std::cerr << "myself(" << player.id << "): [" << player.coords.x
+                              << ", " << player.coords.y << "] (wallsLeft=" << player.wallsLeft << ")\n";
                 } else {
-                    std::cerr << "player(" << players[id].id << "): [" << players[id].coords.x
-                              << ", " << players[id].coords.y << "] (wallsLeft=" << players[id].wallsLeft << ")\n";
+                    std::cerr << "player(" << player.id << "): [" << player.coords.x
+                              << ", " << player.coords.y << "] (wallsLeft=" << player.wallsLeft << ")\n";
                 }
             } else {
-                players[id].bIsAlive = false;
+                player.bIsAlive = false;
                 std::cerr << "_dead_(" << id << "): [" << x << ", " << y << "]\n";
             }
         }
@@ -538,11 +608,11 @@ int main() {
 
         Wall::Vector        walls(wallCount);
         Matrix<Collision>   collisions(w, h);
-        for (size_t idx = 0; idx < wallCount; ++idx) {
-            std::cin >> walls[idx].coords.x >> walls[idx].coords.y >> walls[idx].orientation; std::cin.ignore();
-            std::cerr << "idx(" << idx << "): [" << walls[idx].coords.x << ", " << walls[idx].coords.y << "] '"
-                      << walls[idx].orientation <<"'\n";
-            addWallCollisions(collisions, walls[idx]);
+        for (auto& wall : walls) {
+            std::cin >> wall.coords.x >> wall.coords.y >> wall.orientation; std::cin.ignore();
+            std::cerr << "wall[" << wall.coords.x << ", " << wall.coords.y << "] '"
+                      << wall.orientation <<"'\n";
+            addWallCollisions(collisions, wall);
         }
 
         // Start-counting the time after the input are all read
@@ -556,28 +626,28 @@ int main() {
 
         std::cerr << "matrices of paths:" << std::endl;
         // pathfinding for each player (taking walls into account)
-        for (size_t id = 0; id < playerCount; ++id) {
+        for (auto& player : players) {
             // re-init pathfinding data
-            players[id].paths.init(Cell{ std::numeric_limits<size_t>::max(), eNone });
+            player.paths.init(Cell{ std::numeric_limits<size_t>::max(), eNone });
             // if player still playing
-            if (players[id].bIsAlive) {
+            if (player.bIsAlive) {
                 // pathfinding algorithm:
-                findShortest(players[id].paths, players[id].orientation, collisions);
+                findShortest(player.paths, collisions, player.orientation);
                 // debug dump:
-            //  players[id].paths.dump();
-                players[id].distance = players[id].paths.get(players[id].coords).distance;
+            //  player.paths.dump();
+                player.distance = player.paths.get(player.coords).distance;
                 // debug dump:
-                std::cerr << id << ": distance: " << players[id].distance << std::endl;
+                std::cerr << player.id << ": distance: " << player.distance << std::endl;
             } else {
-                players[id].distance = std::numeric_limits<size_t>::max(); // dead player is far far away...
+                player.distance = std::numeric_limits<size_t>::max(); // dead player is far far away...
             }
         }
 
-        // order of the player into the turn based on its id vs our id (it is our turn, so we have the order 0)
+        // order of the player into the turn based on its id vs my id (it is my turn, so I have the order 0)
         // (a dead player is always last in the ranking since its distance left is set to max => is is removed later)
         Player::VectorPtr rankedPlayers;
         for (size_t order = 0; order < playerCount; ++order) {
-           size_t id = (myId + order) % playerCount;
+           size_t id = (mySelf.id + order) % playerCount;
            players[id].order = order;
            std::cerr << id << ": order: " << players[id].order << std::endl;
            rankedPlayers.push_back(&players[id]);
@@ -595,18 +665,16 @@ int main() {
             rankedPlayers.pop_back();
         }
         // Debug dump:
-        for (Player::VectorPtr::const_iterator ipPlayer  = rankedPlayers.begin();
-                                               ipPlayer != rankedPlayers.end();
-                                             ++ipPlayer) {
-            std::cerr << (*ipPlayer)->id << ", ";
+        for (const auto& player : rankedPlayers) {
+            std::cerr << player->id << ", ";
         }
         std::cerr << std::endl;
 
         // list of players before me based on ranking
         Player::VectorPtr   playersBeforeMe;
-        if (rankedPlayers[0]->id != myId) {
+        if (!rankedPlayers[0]->bIsMySelf) {
             playersBeforeMe.push_back(rankedPlayers[0]);
-            if (rankedPlayers[1]->id != myId) {
+            if (!rankedPlayers[1]->bIsMySelf) {
                 playersBeforeMe.push_back(rankedPlayers[0]);
             }
         }
@@ -623,10 +691,10 @@ int main() {
         if (mySelf.wallsLeft > 0) {         // I have walls left AND
             std::cerr << playersBeforeMe.size() << " player(s) before me\n";
             if (playersBeforeMe.size() > 0) {       // I am not the first player AND
-                const Player& player = players[playersBeforeMe[0]->id];
-                std::cerr << "first player id=" << player.id << " distance=" << player.distance << std::endl;
-                if (playersBeforeMe[0]->distance < 4) {     // The first player is AFTER the middle of the board
-                    if (rankedPlayers.back()->id == myId) {
+                const Player& firstPlayer = players[playersBeforeMe[0]->id];
+                std::cerr << "first player id=" << firstPlayer.id << " distance=" << firstPlayer.distance << std::endl;
+                if (firstPlayer.distance < 4) {     // The first player is AFTER the middle of the board
+                    if (rankedPlayers.back()->bIsMySelf) {
                         std::cerr << "I am the last player!\n";
                     } else {
                         std::cerr << "I am the 2nd player out of 3!\n";
@@ -634,31 +702,60 @@ int main() {
                                   << " distance=" << rankedPlayers.back()->distance << std::endl;
                     }
                     //    I am the last one (2nd out of 2 or 3d out of 3 alive players)
-                    // OR I am the 2nd out of 3 AND the 3rd player is at a distance > 1
-                    if ((rankedPlayers.back()->id == myId) || (rankedPlayers.back()->distance > 1)) {
-                        // TODO(SRombauts): put walls by calculating all impacts of each wall placement
-                        switch (player.id) {
-                        case 0:
-                            bNewWall = putWall(player.paths, walls, Wall{player.coords.right(), 'V'}, "stop here");
-                            if (!bNewWall) {
-                                bNewWall = putWall(player.paths, walls, Wall{player.coords.upright(), 'V'}, "stop!");
+                    // OR I am the 2nd out of 3 AND the 3rd player is at a distance > 2
+                    if ((rankedPlayers.back()->bIsMySelf) || (rankedPlayers.back()->distance > 2)) {
+                        Matrix<Collision>   nextCollisions = collisions;
+                        Matrix<Cell>        nextPaths(w, h);
+                        Evaluation          bestEval;
+                        bestEval.bIsValid = false;
+
+                        // iterate on the path of the first player
+                        Coords coords   = firstPlayer.coords;
+                        size_t distance = firstPlayer.distance;
+                        while (distance > 0) {
+                            const Cell& cell = firstPlayer.paths.get(coords);
+                            std::cerr << "path[" << coords.x << "," << coords.y << "]" << std::endl;
+
+                            // calculate all blocking walls
+                            switch (cell.direction) {
+                            case eRight:
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords.right(), 'V'}, bestEval);
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords.upright(), 'V'}, bestEval);
+                                break;
+                            case eLeft:
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords, 'V'}, bestEval);
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords.up(), 'V'}, bestEval);
+                                break;
+                            case eDown:
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords.down(), 'H'}, bestEval);
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords.downleft(), 'H'}, bestEval);
+                                break;
+                            case eUp:
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords, 'H'}, bestEval);
+                                evalWall(nextPaths, nextCollisions, players, walls,
+                                         Wall{coords.left(), 'H'}, bestEval);
+                                break;
+                            case eNone:
+                            default:
+                                throw std::logic_error("walls: default");
+                                break;
                             }
-                            break;
-                        case 1:
-                            bNewWall = putWall(player.paths, walls, Wall{player.coords, 'V' }, "you shall not pass");
-                            if (!bNewWall) {
-                                bNewWall = putWall(player.paths, walls, Wall{player.coords.up(), 'V'}, "don't move");
-                            }
-                            break;
-                        case 2:
-                            bNewWall = putWall(player.paths, walls, Wall{player.coords.down(), 'H'}, "halt!");
-                            if (!bNewWall) {
-                                bNewWall = putWall(player.paths, walls, Wall{player.coords.downleft(), 'H'}, "wait!");
-                            }
-                            break;
-                        default:
-                            throw std::logic_error("id > 2");
-                            break;
+
+                            coords   = coords.next(cell.direction);
+                            const Cell& nextCell = firstPlayer.paths.get(coords);
+                            distance = nextCell.distance;
+                        }
+                        // if a best evaluation is available, put the wall
+                        if (bestEval.bIsValid) {
+                            bNewWall = true;
+                            Command::put(bestEval.wall, "stop here!");
                         }
                     }
                 }

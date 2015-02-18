@@ -51,7 +51,7 @@ else (MSVC)
     endif (CMAKE_COMPILER_IS_GNUCXX)
 endif (MSVC)
 set(CPPLINT_ARG_LINELENGTH "--linelength=120")
-set(CPPLINT_ARG_VERBOSE    "--verbose=2")
+set(CPPLINT_ARG_VERBOSE    "--verbose=1")
 
 # List all sources/headers files
 set(all_source_files
