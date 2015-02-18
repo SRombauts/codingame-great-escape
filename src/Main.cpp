@@ -12,7 +12,6 @@
 
 #include <iostream>
 #include <iomanip>
-#include <string>
 #include <vector>
 #include <algorithm>
 #include <limits>
@@ -101,6 +100,15 @@ struct Coords {
     }
 };
 
+/// wall data for the list of walls
+struct Wall {
+    /// Vector of walls
+    typedef std::vector<Wall> Vector;
+
+    Coords coords;      ///< coordinates of the upper left corner of the wall
+    char   orientation; ///< 'H'orizontal or 'V'ertical orientation
+};
+
 /**
  * @brief Send commands to the game thru standard output
  *
@@ -146,18 +154,10 @@ public:
         std::cout << "UP " << apMessage << std::endl;
     }
     /// Put a new Wall to a specified location and orientation
-    static void put(const Coords& aCoords, const char aOrientation, const char* apMessage) {
-        std::cout << aCoords.x << " " << aCoords.y << " " << aOrientation << " " << apMessage << std::endl;
+    static void put(const Wall& aWall, const char* apMessage) {
+        std::cout << aWall.coords.x << " " << aWall.coords.y << " " << aWall.orientation << " " << apMessage
+                  << std::endl;
     }
-};
-
-/// wall data for the list of walls
-struct Wall {
-    /// Vector of walls
-    typedef std::vector<Wall> Vector;
-
-    Coords coords;      ///< coordinates of the upper left corner of the wall
-    char   orientation; ///< 'H'orizontal or 'V'ertical orientation
 };
 
 /// wall collision data of a cell for the matrix of walls
@@ -339,7 +339,7 @@ static bool comparePlayers(const Player* apA, const Player* apB) {
 }
 
 /// Set a wall into the collision matrix
-void setWall(Matrix<Collision>& aCollisions, const Wall& aWall) {
+void addWallCollisions(Matrix<Collision>& aCollisions, const Wall& aWall) {
     if (aWall.orientation == 'H') { // 'H' --
         // x,y-1 x+1,y-1
         // x,y   x+1,y
@@ -417,7 +417,7 @@ bool putWall(const Matrix<Cell>& aMatrix, const Wall::Vector& aExistingWalls,
              const Wall& aWall, const char* apMessage) {
     bool bIsCompatible = isCompatible(aMatrix, aExistingWalls, aWall);
     if (bIsCompatible) {
-        Command::put(aWall.coords, aWall.orientation, apMessage);
+        Command::put(aWall, apMessage);
     }
     return bIsCompatible;
 }
@@ -542,7 +542,7 @@ int main() {
             std::cin >> walls[idx].coords.x >> walls[idx].coords.y >> walls[idx].orientation; std::cin.ignore();
             std::cerr << "idx(" << idx << "): [" << walls[idx].coords.x << ", " << walls[idx].coords.y << "] '"
                       << walls[idx].orientation <<"'\n";
-            setWall(collisions, walls[idx]);
+            addWallCollisions(collisions, walls[idx]);
         }
 
         // Start-counting the time after the input are all read
@@ -574,6 +574,7 @@ int main() {
         }
 
         // order of the player into the turn based on its id vs our id (it is our turn, so we have the order 0)
+        // (a dead player is always last in the ranking since its distance left is set to max => is is removed later)
         Player::VectorPtr rankedPlayers;
         for (size_t order = 0; order < playerCount; ++order) {
            size_t id = (myId + order) % playerCount;
@@ -585,6 +586,15 @@ int main() {
         // ranking of each player : distance left, and take into account the order of the player into the turn
         std::cerr << "ranks:" << std::endl;
         std::sort(rankedPlayers.begin(), rankedPlayers.end(), comparePlayers);
+        // explicit rank
+        for (size_t rank = 0; rank < rankedPlayers.size(); rank++) {
+           rankedPlayers.back()->rank = rank;
+        }
+        // remove the dead player (always the last one if any)
+        if (!rankedPlayers.back()->bIsAlive) {
+            rankedPlayers.pop_back();
+        }
+        // Debug dump:
         for (Player::VectorPtr::const_iterator ipPlayer  = rankedPlayers.begin();
                                                ipPlayer != rankedPlayers.end();
                                              ++ipPlayer) {
@@ -592,7 +602,7 @@ int main() {
         }
         std::cerr << std::endl;
 
-        // list of player before me based on ranking
+        // list of players before me based on ranking
         Player::VectorPtr   playersBeforeMe;
         if (rankedPlayers[0]->id != myId) {
             playersBeforeMe.push_back(rankedPlayers[0]);
@@ -601,37 +611,56 @@ int main() {
             }
         }
 
-        // TODO(SRombauts): put walls in with intelligence
         bool bNewWall = false;
 
-        // for now, only put a wall if I am not the first ranked one (and we have walls left!)
-        if ((!playersBeforeMe.empty()) && (mySelf.wallsLeft > 0)) {
-            const Player& player = players[playersBeforeMe[0]->id];
-            std::cerr << "playersBeforeMe[0]=" << player.id << " distance=" << player.distance << std::endl;
-            // and only after the middle of the board
-            if (playersBeforeMe[0]->distance < 5) {
-                switch (player.id) {
-                case 0:
-                    bNewWall = putWall(player.paths, walls, Wall{player.coords.right(), 'V'}, "stop here");
-                    if (!bNewWall) {
-                        bNewWall = putWall(player.paths, walls, Wall{player.coords.upright(), 'V'}, "stop there");
+        // Only put a wall if :
+        // - I have walls left AND
+        //   - I am not the first player AND
+        //     - The first player is at a distance < 4 (AFTER the middle of the board)
+        //       -    I am the last one (2nd out of 2 or 3d out of 3 alive players)
+        //       - OR I am the 2nd out of 3 AND the 3rd player is at a distance > 1
+        std::cerr << mySelf.wallsLeft << " wall(s) left\n";
+        if (mySelf.wallsLeft > 0) {         // I have walls left AND
+            std::cerr << playersBeforeMe.size() << " player(s) before me\n";
+            if (playersBeforeMe.size() > 0) {       // I am not the first player AND
+                const Player& player = players[playersBeforeMe[0]->id];
+                std::cerr << "first player id=" << player.id << " distance=" << player.distance << std::endl;
+                if (playersBeforeMe[0]->distance < 4) {     // The first player is AFTER the middle of the board
+                    if (rankedPlayers.back()->id == myId) {
+                        std::cerr << "I am the last player!\n";
+                    } else {
+                        std::cerr << "I am the 2nd player out of 3!\n";
+                        std::cerr << "last player id=" << rankedPlayers.back()->id
+                                  << " distance=" << rankedPlayers.back()->distance << std::endl;
                     }
-                    break;
-                case 1:
-                    bNewWall = putWall(player.paths, walls, Wall{player.coords, 'V'}, "you shall not pass");
-                    if (!bNewWall) {
-                        bNewWall = putWall(player.paths, walls, Wall{ player.coords.up(), 'V' }, "don't move");
+                    //    I am the last one (2nd out of 2 or 3d out of 3 alive players)
+                    // OR I am the 2nd out of 3 AND the 3rd player is at a distance > 1
+                    if ((rankedPlayers.back()->id == myId) || (rankedPlayers.back()->distance > 1)) {
+                        // TODO(SRombauts): put walls by calculating all impacts of each wall placement
+                        switch (player.id) {
+                        case 0:
+                            bNewWall = putWall(player.paths, walls, Wall{player.coords.right(), 'V'}, "stop here");
+                            if (!bNewWall) {
+                                bNewWall = putWall(player.paths, walls, Wall{player.coords.upright(), 'V'}, "stop!");
+                            }
+                            break;
+                        case 1:
+                            bNewWall = putWall(player.paths, walls, Wall{player.coords, 'V' }, "you shall not pass");
+                            if (!bNewWall) {
+                                bNewWall = putWall(player.paths, walls, Wall{player.coords.up(), 'V'}, "don't move");
+                            }
+                            break;
+                        case 2:
+                            bNewWall = putWall(player.paths, walls, Wall{player.coords.down(), 'H'}, "halt!");
+                            if (!bNewWall) {
+                                bNewWall = putWall(player.paths, walls, Wall{player.coords.downleft(), 'H'}, "wait!");
+                            }
+                            break;
+                        default:
+                            throw std::logic_error("id > 2");
+                            break;
+                        }
                     }
-                    break;
-                case 2:
-                    bNewWall = putWall(player.paths, walls, Wall{player.coords.down(), 'H'}, "halt!");
-                    if (!bNewWall) {
-                        bNewWall = putWall(player.paths, walls, Wall{ player.coords.downleft(), 'H' }, "wait!");
-                    }
-                    break;
-                default:
-                    throw std::logic_error("id > 2");
-                    break;
                 }
             }
         }
