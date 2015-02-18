@@ -30,17 +30,24 @@ else (MSVC)
 
     # C++11 :
     add_definitions(-std=c++0x) # equivalent to "-std=c++11" but backward compatible for GCC 4.6 on Travic-CI
-    # Maximum of Warnings :
+    # Stack protection
+    add_definitions(-fstack-protector-all)
+    
     if (CMAKE_COMPILER_IS_GNUCXX)
         # GCC flags
-        add_definitions(-rdynamic -fstack-protector-all -Wall -Wextra -Wswitch-default -Wswitch-enum -Winit-self -Wformat-security -Wfloat-equal -Wcast-qual -Wconversion -Wlogical-op -Winline)
+        # For stacktraces:
+        add_definitions(-rdynamic -fstack-protector-all)
+        # Enable maximum of Warnings :
+        add_definitions(-Wall -Wextra -Wswitch-default -Wswitch-enum -Winit-self -Wformat-security -Wfloat-equal -Wcast-qual -Wconversion -Wlogical-op -Winline)
         if (CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL "4.9" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "4.9")
             add_definitions (-Wfloat-conversion)
             add_definitions (-Wshadow)
         endif ()
     elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         # Clang flags
-        add_definitions(-fstack-protector-all -Wall -Wextra -Wswitch-default -Wswitch-enum -Winit-self -Wformat-security -Wfloat-equal -Wshadow -Wcast-qual -Wconversion -Winline)
+        # Enable maximum of Warnings :
+        add_definitions(-Weverything)
+        add_definitions(-Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-padded -Wno-covered-switch-default -Wno-unreachable-code -Wno-missing-prototypes)
     endif (CMAKE_COMPILER_IS_GNUCXX)
 endif (MSVC)
 set(CPPLINT_ARG_LINELENGTH "--linelength=120")
@@ -82,7 +89,7 @@ if (THEGREATESCAPE_RUN_CPPCHECK)
          COMMAND cppcheck -j 4 cppcheck --enable=style --quiet ${CPPCHECK_ARG_TEMPLATE} ${PROJECT_SOURCE_DIR}/src
         )
     else (CPPCHECK_EXECUTABLE)
-        message(STATUS "cppcheck not found")
+        message(STATUS "Could NOT find cppcheck")
     endif (CPPCHECK_EXECUTABLE)
 else (THEGREATESCAPE_RUN_CPPCHECK)
     message(STATUS "THEGREATESCAPE_RUN_CPPCHECK OFF")
@@ -98,8 +105,6 @@ if (THEGREATESCAPE_RUN_DOXYGEN)
          COMMAND doxygen Doxyfile > ${DEV_NULL}
          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
         )
-    else (DOXYGEN_FOUND)
-        message(STATUS "Doxygen not found")
     endif (DOXYGEN_FOUND)
 else (THEGREATESCAPE_RUN_DOXYGEN)
     message(STATUS "THEGREATESCAPE_RUN_DOXYGEN OFF")
