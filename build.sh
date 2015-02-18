@@ -13,5 +13,8 @@ if command -v clang >/dev/null 2>&1 ; then
     export CCACHE_CPP2=yes # CMake special ccache mode for clang
 fi
 
+# Generate a Makefile with Debug flags
 cmake .. -DCMAKE_BUILD_TYPE=Debug
+
+# Build (ie 'make')
 cmake --build .

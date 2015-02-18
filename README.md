@@ -1,8 +1,8 @@
 codingame-great-escape
-------------
+----------------------
 
-[![Linux Build Status](https://travis-ci.org/SRombauts/codingame-great-escape.svg)](https://travis-ci.org/SRombauts/codingame-great-escape)
-[![Windows Build status](https://ci.appveyor.com/api/projects/status/github/SRombauts/codingame-great-escape?svg=true)](https://ci.appveyor.com/project/SbastienRombauts/codingame-great-escape)
+[![Travis CI Linux Build Status](https://travis-ci.org/SRombauts/codingame-great-escape.svg)](https://travis-ci.org/SRombauts/codingame-great-escape "Travis CI Linux Build Status")
+[![AppVeyor Windows Build status](https://ci.appveyor.com/api/projects/status/github/SRombauts/codingame-great-escape?svg=true)](https://ci.appveyor.com/project/SbastienRombauts/codingame-great-escape "AppVeyor Windows Build status")
 
 My attempt at the Multiplayer CodinGame contest "The Great Escape".
 
@@ -27,12 +27,12 @@ cmake --build . # make
 ctest .         # make test
 ```
 
-### Debug build
+### Debug build for Unix Makefiles
 
 ```bash
 mkdir Debug
 cd Debug
-cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug
+cmake .. -DCMAKE_BUILD_TYPE=Debug   # -G "Unix Makefiles"
 cmake --build . # make
 ctest .         # make test
 ```
@@ -42,7 +42,7 @@ ctest .         # make test
 ```bash
 mkdir Release
 cd Release
-cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release  # -G "Unix Makefiles"
 cmake --build . # make
 ctest .         # make test
 ```
