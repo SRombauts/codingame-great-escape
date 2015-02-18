@@ -310,10 +310,10 @@ struct Player {
 
 /// ranking of each player : distance left, and take into account the order of the player into the turn
 static bool comparePlayers(const Player* apA, const Player* apB) {
-    if (apA->distance == apB->distance) {
-        return (apA->order < apB->order);
-    } else  {
+    if (apA->distance != apB->distance) {
         return (apA->distance < apB->distance);
+    } else  {
+        return (apA->order < apB->order);
     }
 }
 
@@ -451,6 +451,8 @@ void findShortest(Matrix<Cell>& aMatrix, const EDirection aOrientation, const Ma
             findShortest(aMatrix, aOrientation, aCollisions, Coords{ x, y }, 0, eNone);
         }
         break;
+    case eUp:
+    case eNone:
     default:
         throw std::logic_error("shortest: default");
         break;
