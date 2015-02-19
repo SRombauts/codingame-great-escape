@@ -473,20 +473,22 @@ bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall& aWall
             bIsCompatible = false;
         }
     }
-    std::cerr << "isCompatible([" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation << ")="
-              << bIsCompatible << std::endl;
+    // std::cerr << "isCompatible()=" << bIsCompatible << std::endl;
     return bIsCompatible;
 }
 
 /// Test compatibility of a new wall against all walls already on the board
 bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall::Vector& aExistingWalls, const Wall& aWall) {
     bool bIsCompatible = isCompatible(aWidthX, aHeightY, aWall);
-    Wall::Vector::const_iterator iWall = aExistingWalls.begin();
-    while ((iWall != aExistingWalls.end()) && (bIsCompatible == true)) {
-        bIsCompatible = isCompatible(*iWall, aWall);
-        ++iWall;
+    if (bIsCompatible) {
+        Wall::Vector::const_iterator iWall = aExistingWalls.begin();
+        while ((iWall != aExistingWalls.end()) && (bIsCompatible == true)) {
+            bIsCompatible = isCompatible(*iWall, aWall);
+            ++iWall;
+        }
+        std::cerr << "isCompatible([" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation << ")="
+            << bIsCompatible << std::endl;
     }
-    // std::cerr << "isCompatible()=" << bIsCompatible << std::endl;
     return bIsCompatible;
 }
 
@@ -494,22 +496,14 @@ bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall::Vecto
 struct Evaluation {
     bool    bIsValid;       ///< Does this structure represent a valide result (no player blocked)
     Wall    wall;           ///< Wall to evaluate
-    size_t  impactOnFirst;  ///< Increase of distance on the shortest path of the first player
+    size_t  impactOnFirst;  ///< Increase of distance on the shortest path of the first player [O:
     size_t  impactOnMySelf; ///< Increase of distance on the shortest path of myself
     size_t  impactOnOther;  ///< Increase of distance on the shortest path of the other player if any
 
-    /// evaluation of the best result to keep
+    /// evaluation of the best result to keep (equal is to keep the LAST best eval, ie next to the exit
     bool operator<= (const Evaluation& aEvaluation) {
-        // take into account impactOnFirst, then impactOnMySelf, and then impactOnOther (if any)
-        if (impactOnFirst < aEvaluation.impactOnFirst) {
-            return true;
-        }  else {
-            if (impactOnMySelf > aEvaluation.impactOnMySelf) {
-                return true;
-            } else {
-                return (impactOnOther <= aEvaluation.impactOnOther);
-            }
-        }
+        return (((100.f*impactOnFirst)-(70.f*impactOnMySelf)+(40.f*impactOnOther))
+            <= ((100.f*aEvaluation.impactOnFirst)-(70.f*aEvaluation.impactOnMySelf)+(40.f*aEvaluation.impactOnOther)));
     }
 };
 
@@ -554,11 +548,10 @@ void evalWall(Matrix<Cell>& aPaths, Matrix<Collision>& aCollisions,
                 }
             }
         }
-        // evaluation of the result to keep the best (keep the last one, near the exit)
-        if ((eval.bIsValid) && ((aBestEval <= eval) || (!aBestEval.bIsValid))) {
-            std::cerr << "new best[" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation << "\n";
-            std::cerr << "new best(" << eval.impactOnFirst << ";" << eval.impactOnMySelf
-                << ";" << eval.impactOnOther << ")\n";
+        // evaluation of the result to keep the best (keep the last one, ie near the exit)
+        if ((eval.bIsValid) && (eval.impactOnFirst > 0) && ((aBestEval <= eval) || (!aBestEval.bIsValid))) {
+            std::cerr << "new best[" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation
+                << " (" << eval.impactOnFirst << ";" << eval.impactOnMySelf << ";" << eval.impactOnOther << ")\n";
             eval.wall = aWall;
             aBestEval = eval;
             std::cerr << "new best[" << aBestEval.wall.coords.x << "," << aBestEval.wall.coords.y
@@ -683,7 +676,7 @@ int main() {
         std::sort(rankedPlayers.begin(), rankedPlayers.end(), comparePlayers);
         // explicit rank
         for (size_t rank = 0; rank < rankedPlayers.size(); rank++) {
-           rankedPlayers.back()->rank = rank;
+           rankedPlayers[rank]->rank = rank;
         }
         // remove the dead player (always the last one if any)
         if (!rankedPlayers.back()->bIsAlive) {
