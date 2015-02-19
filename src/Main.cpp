@@ -473,7 +473,7 @@ bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall& aWall
             bIsCompatible = false;
         }
     }
-    std::cerr << "isCompatible(" << aWall.coords.x << ", " << aWall.coords.y << ", " << aWall.orientation << ")="
+    std::cerr << "isCompatible([" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation << ")="
               << bIsCompatible << std::endl;
     return bIsCompatible;
 }
@@ -486,7 +486,7 @@ bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall::Vecto
         bIsCompatible = isCompatible(*iWall, aWall);
         ++iWall;
     }
-    std::cerr << "isCompatible()=" << bIsCompatible << std::endl;
+    // std::cerr << "isCompatible()=" << bIsCompatible << std::endl;
     return bIsCompatible;
 }
 
@@ -499,9 +499,17 @@ struct Evaluation {
     size_t  impactOnOther;  ///< Increase of distance on the shortest path of the other player if any
 
     /// evaluation of the best result to keep
-    bool operator< (const Evaluation& aEvaluation) {
-        // TODO(SRombauts) take into account impactOnMySelf, and then impactOnOther
-        return (impactOnFirst > aEvaluation.impactOnFirst);
+    bool operator<= (const Evaluation& aEvaluation) {
+        // take into account impactOnFirst, then impactOnMySelf, and then impactOnOther (if any)
+        if (impactOnFirst < aEvaluation.impactOnFirst) {
+            return true;
+        }  else {
+            if (impactOnMySelf > aEvaluation.impactOnMySelf) {
+                return true;
+            } else {
+                return (impactOnOther <= aEvaluation.impactOnOther);
+            }
+        }
     }
 };
 
@@ -512,7 +520,10 @@ void evalWall(Matrix<Cell>& aPaths, Matrix<Collision>& aCollisions,
     bool bIsCompatible = isCompatible(aPaths.width(), aPaths.height(), aExistingWalls, aWall);
     if (bIsCompatible) {
         Evaluation eval;
-        eval.bIsValid = true;
+        eval.bIsValid       = true;
+        eval.impactOnFirst  = 0;
+        eval.impactOnMySelf = 0;
+        eval.impactOnOther  = 0;
 
         addWallCollisions(aCollisions, aWall, true);    // set
 
@@ -521,26 +532,39 @@ void evalWall(Matrix<Cell>& aPaths, Matrix<Collision>& aCollisions,
                 aPaths.init(Cell{std::numeric_limits<size_t>::max(), eNone});
                 findShortest(aPaths, aCollisions, player.orientation);
                 const size_t nextDistance = aPaths.get(player.coords).distance;
-                std::cerr << "nextDistance(" << player.id << "[" << player.coords.x << "," << player.coords.y << "])="
-                          << nextDistance << std::endl;
                 if (nextDistance < std::numeric_limits<size_t>::max()) {
+                    std::cerr << "nextDistance(" << player.id << " [" << player.coords.x << "," << player.coords.y
+                              << "])=" << nextDistance << std::endl;
                     if (player.rank == 0) {
                         eval.impactOnFirst    = (nextDistance - player.distance);
+                        std::cerr << "impactOnFirst(" << nextDistance << "-" << player.distance
+                                  << ")=" << eval.impactOnFirst << std::endl;
                     } else if (player.bIsMySelf) {
                         eval.impactOnMySelf   = (nextDistance - player.distance);
+                        std::cerr << "impactOnMySelf(" << nextDistance << "-" << player.distance
+                            << ")=" << eval.impactOnMySelf << std::endl;
                     } else {
                         eval.impactOnOther    = (nextDistance - player.distance);
+                        std::cerr << "impactOnOther(" << nextDistance << "-" << player.distance
+                            << ")=" << eval.impactOnOther << std::endl;
                     }
                 } else {
                     eval.bIsValid = false;
+                    break;
                 }
             }
         }
-        // evaluation of the result to keep the best
-        if ((aBestEval < eval) || (!aBestEval.bIsValid)) {
-            std::cerr << "new best eval" << std::endl;
+        // evaluation of the result to keep the best (keep the last one, near the exit)
+        if ((eval.bIsValid) && ((aBestEval <= eval) || (!aBestEval.bIsValid))) {
+            std::cerr << "new best[" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation << "\n";
+            std::cerr << "new best(" << eval.impactOnFirst << ";" << eval.impactOnMySelf
+                << ";" << eval.impactOnOther << ")\n";
             eval.wall = aWall;
             aBestEval = eval;
+            std::cerr << "new best[" << aBestEval.wall.coords.x << "," << aBestEval.wall.coords.y
+                << "] " << aBestEval.wall.orientation << "\n";
+            std::cerr << "new best(" << aBestEval.impactOnFirst << ";" << aBestEval.impactOnMySelf
+                << ";" << aBestEval.impactOnOther << ")\n";
         }
 
         addWallCollisions(aCollisions, aWall, false);   // reset
@@ -566,6 +590,7 @@ int main() {
     Player& mySelf = players[myId];
     mySelf.bIsMySelf = true;
     Measure measure;
+    bool bModeWall = false; // memory to keep putting walls after the first one
 
     // game loop
     for (size_t turn = 0; turn < 100; ++turn) {
@@ -588,7 +613,7 @@ int main() {
                 player.coords.y = static_cast<size_t>(y);
                 player.bIsAlive = true;
 
-                // debug:
+                /* debug:
                 if (player.bIsMySelf) {
                     std::cerr << "myself(" << player.id << "): [" << player.coords.x
                               << ", " << player.coords.y << "] (wallsLeft=" << player.wallsLeft << ")\n";
@@ -596,6 +621,7 @@ int main() {
                     std::cerr << "player(" << player.id << "): [" << player.coords.x
                               << ", " << player.coords.y << "] (wallsLeft=" << player.wallsLeft << ")\n";
                 }
+                */
             } else {
                 player.bIsAlive = false;
                 std::cerr << "_dead_(" << id << "): [" << x << ", " << y << "]\n";
@@ -610,8 +636,8 @@ int main() {
         Matrix<Collision>   collisions(w, h);
         for (auto& wall : walls) {
             std::cin >> wall.coords.x >> wall.coords.y >> wall.orientation; std::cin.ignore();
-            std::cerr << "wall[" << wall.coords.x << ", " << wall.coords.y << "] '"
-                      << wall.orientation <<"'\n";
+            /* std::cerr << "wall[" << wall.coords.x << ", " << wall.coords.y << "] '"
+                      << wall.orientation <<"'\n"; */
             addWallCollisions(collisions, wall);
         }
 
@@ -621,10 +647,10 @@ int main() {
     //  std::cerr << "turn " << turn << std::endl;
 
         // debug dump:
-        std::cerr << "matrix of walls:" << std::endl;
+    //  std::cerr << "matrix of walls:" << std::endl;
     //  collisions.dump();
 
-        std::cerr << "matrices of paths:" << std::endl;
+    //  std::cerr << "matrices of paths:" << std::endl;
         // pathfinding for each player (taking walls into account)
         for (auto& player : players) {
             // re-init pathfinding data
@@ -649,12 +675,11 @@ int main() {
         for (size_t order = 0; order < playerCount; ++order) {
            size_t id = (mySelf.id + order) % playerCount;
            players[id].order = order;
-           std::cerr << id << ": order: " << players[id].order << std::endl;
+           // std::cerr << id << ": order: " << players[id].order << std::endl;
            rankedPlayers.push_back(&players[id]);
         }
 
         // ranking of each player : distance left, and take into account the order of the player into the turn
-        std::cerr << "ranks:" << std::endl;
         std::sort(rankedPlayers.begin(), rankedPlayers.end(), comparePlayers);
         // explicit rank
         for (size_t rank = 0; rank < rankedPlayers.size(); rank++) {
@@ -665,6 +690,7 @@ int main() {
             rankedPlayers.pop_back();
         }
         // Debug dump:
+        std::cerr << "ranks: ";
         for (const auto& player : rankedPlayers) {
             std::cerr << player->id << ", ";
         }
@@ -693,7 +719,8 @@ int main() {
             if (playersBeforeMe.size() > 0) {       // I am not the first player AND
                 const Player& firstPlayer = players[playersBeforeMe[0]->id];
                 std::cerr << "first player id=" << firstPlayer.id << " distance=" << firstPlayer.distance << std::endl;
-                if (firstPlayer.distance < 4) {     // The first player is AFTER the middle of the board
+
+                if ((firstPlayer.distance < 4) || (bModeWall)) {     // The first player is not far from the end
                     if (rankedPlayers.back()->bIsMySelf) {
                         std::cerr << "I am the last player!\n";
                     } else {
@@ -703,11 +730,16 @@ int main() {
                     }
                     //    I am the last one (2nd out of 2 or 3d out of 3 alive players)
                     // OR I am the 2nd out of 3 AND the 3rd player is at a distance > 2
-                    if ((rankedPlayers.back()->bIsMySelf) || (rankedPlayers.back()->distance > 2)) {
+                    if ((rankedPlayers.back()->bIsMySelf) || (rankedPlayers.back()->distance > 2) || (bModeWall)) {
                         Matrix<Collision>   nextCollisions = collisions;
                         Matrix<Cell>        nextPaths(w, h);
                         Evaluation          bestEval;
-                        bestEval.bIsValid = false;
+                        bestEval.bIsValid       = false;
+                        bestEval.impactOnFirst  = 0;
+                        bestEval.impactOnMySelf = 0;
+                        bestEval.impactOnOther  = 0;
+
+                        bModeWall = true; // memory to keep putting walls
 
                         // iterate on the path of the first player
                         Coords coords   = firstPlayer.coords;
@@ -754,6 +786,8 @@ int main() {
                         }
                         // if a best evaluation is available, put the wall
                         if (bestEval.bIsValid) {
+                            std::cerr << "best eval (" << bestEval.impactOnFirst << ";" << bestEval.impactOnMySelf
+                                      << ";" << bestEval.impactOnOther << ")\n";
                             bNewWall = true;
                             Command::put(bestEval.wall, "stop here!");
                         }
