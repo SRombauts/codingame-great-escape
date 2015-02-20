@@ -51,6 +51,10 @@ ctest .         # make test
 
 This project is continuously tested under Ubuntu Linux with the gcc and clang compilers
 using the Travis CI community service with the above CMake building and testing procedure.
+It is also tested in the same way under Windows Server 2012 R2 with Visual Studio 2013 compiler
+using the AppVeyor countinuous integration service.
 
-Detailed results can be seen online: https://travis-ci.org/SRombauts/codingame-great-escape
+Detailed results can be seen online:
+ - https://travis-ci.org/SRombauts/codingame-great-escape
+ - https://ci.appveyor.com/project/SbastienRombauts/codingame-great-escape
 
