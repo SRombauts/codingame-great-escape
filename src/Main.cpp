@@ -118,6 +118,12 @@ struct Coords {
     }
 };
 
+/// Debug dump
+std::ostream& operator<<(std::ostream& aStream, const Coords& aCoords) {
+    aStream << aCoords.x << ',' << aCoords.y;
+    return aStream;
+}
+
 /// wall data for the list of walls
 struct Wall {
     /// Vector of walls
@@ -295,6 +301,8 @@ private:
     /// Matrix as a vector of vectors of Elements
     typedef std::vector<Vector1D>   Vector2D;
 
+    /// TODO(SRombauts) try and compare performances (construction, copy, usage) with a 1D vector using math
+    ///                 Then compare with a std::array
     Vector2D mMatrix;    ///< Matrix as a vector of vectors of Elements
 };
 
@@ -329,6 +337,15 @@ struct Player {
     size_t          order;       ///< order of the player into the turn based on its id vs me (I am playing = order 0)
     size_t          rank;        ///< rank based on the distance left and the order of the player
     bool            bIsAlive;    ///< true while the player is alive
+
+    /// ranking of each player : distance left, and take into account the order of the player into the turn
+    static bool compare(const Player* apA, const Player* apB) {
+    if (apA->distance != apB->distance) {
+        return (apA->distance < apB->distance);
+    } else  {
+        return (apA->order < apB->order);
+    }
+}
 };
 
 /// Time measure using C++11 std::chrono
@@ -348,15 +365,6 @@ public:
 private:
     std::chrono::high_resolution_clock::time_point   mStartTime; ///< Store the first time measure
 };
-
-/// ranking of each player : distance left, and take into account the order of the player into the turn
-static bool comparePlayers(const Player* apA, const Player* apB) {
-    if (apA->distance != apB->distance) {
-        return (apA->distance < apB->distance);
-    } else  {
-        return (apA->order < apB->order);
-    }
-}
 
 /// Recursive shortest path algorithm
 void findShortest(Matrix<Cell>& aOutPaths, const Matrix<Collision>& aCollisions, const EDirection aOrientation,
@@ -486,7 +494,7 @@ bool isCompatible(const size_t aWidthX, const size_t aHeightY, const Wall::Vecto
             bIsCompatible = isCompatible(*iWall, aWall);
             ++iWall;
         }
-        std::cerr << "isCompatible([" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation << ")="
+        std::cerr << "isCompatible([" << aWall.coords << "] " << aWall.orientation << ")="
             << bIsCompatible << std::endl;
     }
     return bIsCompatible;
@@ -527,8 +535,8 @@ void evalWall(Matrix<Cell>& aPaths, Matrix<Collision>& aCollisions,
                 findShortest(aPaths, aCollisions, player.orientation);
                 const size_t nextDistance = aPaths.get(player.coords).distance;
                 if (nextDistance < std::numeric_limits<size_t>::max()) {
-                    std::cerr << "nextDistance(" << player.id << " [" << player.coords.x << "," << player.coords.y
-                              << "])=" << nextDistance << std::endl;
+                    std::cerr << "nextDistance(" << player.id << " [" << player.coords << "])="
+                              << nextDistance << std::endl;
                     if (player.rank == 0) {
                         eval.impactOnFirst    = (nextDistance - player.distance);
                         std::cerr << "impactOnFirst(" << nextDistance << "-" << player.distance
@@ -550,12 +558,11 @@ void evalWall(Matrix<Cell>& aPaths, Matrix<Collision>& aCollisions,
         }
         // evaluation of the result to keep the best (keep the last one, ie near the exit)
         if ((eval.bIsValid) && (eval.impactOnFirst > 0) && ((aBestEval <= eval) || (!aBestEval.bIsValid))) {
-            std::cerr << "new best[" << aWall.coords.x << "," << aWall.coords.y << "] " << aWall.orientation
+            std::cerr << "new best[" << aWall.coords << "] " << aWall.orientation
                 << " (" << eval.impactOnFirst << ";" << eval.impactOnMySelf << ";" << eval.impactOnOther << ")\n";
             eval.wall = aWall;
             aBestEval = eval;
-            std::cerr << "new best[" << aBestEval.wall.coords.x << "," << aBestEval.wall.coords.y
-                << "] " << aBestEval.wall.orientation << "\n";
+            std::cerr << "new best[" << aBestEval.wall.coords << "] " << aBestEval.wall.orientation << "\n";
             std::cerr << "new best(" << aBestEval.impactOnFirst << ";" << aBestEval.impactOnMySelf
                 << ";" << aBestEval.impactOnOther << ")\n";
         }
@@ -629,7 +636,7 @@ int main() {
         Matrix<Collision>   collisions(w, h);
         for (auto& wall : walls) {
             std::cin >> wall.coords.x >> wall.coords.y >> wall.orientation; std::cin.ignore();
-            /* std::cerr << "wall[" << wall.coords.x << ", " << wall.coords.y << "] '"
+            /* std::cerr << "wall[" << wall.coords << "] '"
                       << wall.orientation <<"'\n"; */
             addWallCollisions(collisions, wall);
         }
@@ -673,7 +680,7 @@ int main() {
         }
 
         // ranking of each player : distance left, and take into account the order of the player into the turn
-        std::sort(rankedPlayers.begin(), rankedPlayers.end(), comparePlayers);
+        std::sort(rankedPlayers.begin(), rankedPlayers.end(), Player::compare);
         // explicit rank
         for (size_t rank = 0; rank < rankedPlayers.size(); rank++) {
            rankedPlayers[rank]->rank = rank;
@@ -739,7 +746,7 @@ int main() {
                         size_t distance = firstPlayer.distance;
                         while (distance > 0) {
                             const Cell& cell = firstPlayer.paths.get(coords);
-                            std::cerr << "path[" << coords.x << "," << coords.y << "]" << std::endl;
+                            std::cerr << "path[" << coords << "]" << std::endl;
 
                             // calculate all blocking walls
                             switch (cell.direction) {
@@ -792,7 +799,7 @@ int main() {
         if (false == bNewWall) {
             // use the matrix of shortest paths to issue a command
             EDirection bestDirection = mySelf.paths.get(mySelf.coords).direction;
-            std::cerr << "[" << mySelf.coords.x << ", " << mySelf.coords.y << "]=>'" << toChar(bestDirection) << "'\n";
+            std::cerr << "[" << mySelf.coords << "]=>'" << toChar(bestDirection) << "'\n";
             Command::move(bestDirection);
         }
 
