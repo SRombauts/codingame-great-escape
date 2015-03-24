@@ -1,11 +1,11 @@
-# Copyright (c) 2015 Sébastien Rombauts (sebastien.rombauts@gmail.com)
+# Copyright (c) 2015 Sebastien Rombauts (sebastien.rombauts@gmail.com)
 
 # build format
 version: "{build}"
 
 # scripts that run after cloning repository
 install:
-  - git submodule update --init --recursive
+  - git submodule update --init cpplint
 
 # configurations to add to build matrix
 configuration:
@@ -18,6 +18,6 @@ before_build:
   - cd build
   - cmake ..
 
-# build
+# build app
 build_script:
   - cmake --build .

@@ -73,6 +73,7 @@ set(doc_files
  ${CMAKE_SOURCE_DIR}/README.md
  ${CMAKE_SOURCE_DIR}/LICENSE.txt
 )
+source_group(doc,     FILES ${doc_files})
 
 # All includes are relative to the "src" directory
 include_directories("${PROJECT_SOURCE_DIR}/src")
@@ -80,6 +81,7 @@ include_directories("${PROJECT_SOURCE_DIR}/src")
 # add the application executable
 add_executable(TheGreatEscape ${source_files} ${doc_files} ${script_files})
 target_link_libraries(TheGreatEscape ${SYSTEM_LIBRARIES})
+
 
 # Optional additional targets:
 
@@ -101,7 +103,7 @@ if (THEGREATESCAPE_RUN_CPPCHECK)
         # add a cppcheck target to the "all" target
         add_custom_target(cppcheck
          ALL
-         COMMAND cppcheck -j 4 cppcheck --enable=style --quiet ${CPPCHECK_ARG_TEMPLATE} ${PROJECT_SOURCE_DIR}/src
+         COMMAND cppcheck -j 4 --enable=style --quiet ${CPPCHECK_ARG_TEMPLATE} ${PROJECT_SOURCE_DIR}/src
         )
     else (CPPCHECK_EXECUTABLE)
         message(STATUS "Could NOT find cppcheck")
