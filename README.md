@@ -1,6 +1,8 @@
 codingame-great-escape
 ----------------------
 
+[![Join the chat at https://gitter.im/SRombauts/codingame-great-escape](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/SRombauts/codingame-great-escape?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 [![Travis CI Linux Build Status](https://travis-ci.org/SRombauts/codingame-great-escape.svg)](https://travis-ci.org/SRombauts/codingame-great-escape "Travis CI Linux Build Status")
 [![AppVeyor Windows Build status](https://ci.appveyor.com/api/projects/status/github/SRombauts/codingame-great-escape?svg=true)](https://ci.appveyor.com/project/SbastienRombauts/codingame-great-escape "AppVeyor Windows Build status")
 
