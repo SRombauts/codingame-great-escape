@@ -259,24 +259,24 @@ public:
     }
     /// height of the matrix (Nb of lines, Y axis)
     size_t height() const {
-        return mMatrix.at(0).size();
+        return mMatrix[0].size();
     }
 
-    /// getter for cell at [X, Y] (const reference) uses vector::at() with safety check : can throw std::out_of_range
+    /// getter for cell at [X, Y] (const reference)
     const TElement& get(const size_t aX, const size_t aY) const {
-        return mMatrix.at(aX).at(aY); // return mMatrix[aX][aY];
+        return mMatrix[aX][aY]; // return mMatrix[aX][aY];
     }
-    /// getter for cell at [X, Y] (const reference) uses vector::at() with safety check : can throw std::out_of_range
+    /// getter for cell at [X, Y] (const reference)
     const TElement& get(const Coords& aCoords) const {
-        return mMatrix.at(aCoords.x).at(aCoords.y);
+        return mMatrix[aCoords.x][aCoords.y];
     }
-    /// "setter" for cell at [X, Y] (reference) uses vector::at() with safety check : can throw std::out_of_range
+    /// "setter" for cell at [X, Y] (in fact a non-const reference)
     TElement& set(const size_t aX, const size_t aY) {
-        return mMatrix.at(aX).at(aY);
+        return mMatrix[aX][aY];
     }
-    /// "setter" for cell at [X, Y] (reference) uses vector::at() with safety check : can throw std::out_of_range
+    /// "setter" for cell at [X, Y] (in fact a non-const reference)
     TElement& set(const Coords& aCoords) {
-        return mMatrix.at(aCoords.x).at(aCoords.y);
+        return mMatrix[aCoords.x][aCoords.y];
     }
 
     /// debug: dump content of the Matrix of TElement, using a required TElement::dump() method
@@ -303,7 +303,10 @@ private:
 
     /// TODO(SRombauts) try and compare performances (construction, copy, usage) with a 1D vector using math
     ///                 Then compare with a std::array
+    /// best total_ms : 5.55ms
+    /// at() => []    : 3.73ms
     Vector2D mMatrix;    ///< Matrix as a vector of vectors of Elements
+    Vector1D mVector;    ///< Matrix as a 1D vector of Elements
 };
 
 /// player data
@@ -392,10 +395,14 @@ void findShortest(Matrix<Cell>& aOutPaths, const Matrix<Collision>& aCollisions,
         }
     }
 }
+static double total_ms = 0;
 /// Shortest path algorithm
 void findShortest(Matrix<Cell>& aOutPaths, const Matrix<Collision>& aCollisions, const EDirection aOrientation) {
     size_t x;
     size_t y;
+
+    Measure measure;
+    measure.start();
 
     switch (aOrientation) {
     case eRight:
@@ -422,6 +429,12 @@ void findShortest(Matrix<Cell>& aOutPaths, const Matrix<Collision>& aCollisions,
         throw std::logic_error("shortest: default");
         break;
     }
+
+    // benchmarking
+    const double diff_ms = measure.get();
+    total_ms += diff_ms;
+    std::cerr << "findShortest: " << std::fixed << diff_ms << "ms\n";
+    std::cerr << "findShortest: " << std::fixed << total_ms << "ms\n";
 }
 
 /// Set a wall into the collision matrix
